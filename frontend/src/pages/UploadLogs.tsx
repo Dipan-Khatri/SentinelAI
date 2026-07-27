@@ -1,7 +1,16 @@
 import { useState } from "react";
-import { FileText, ShieldCheck, Upload } from "lucide-react";
+import {
+  CheckCircle2,
+  FileText,
+  LoaderCircle,
+  ShieldCheck,
+  Upload,
+} from "lucide-react";
+
+import { uploadLog, type UploadResult } from "../services/api";
 
 type FilePreview = {
+  file: File;
   name: string;
   size: string;
   entries: number;
@@ -10,7 +19,9 @@ type FilePreview = {
 
 function UploadLogs() {
   const [preview, setPreview] = useState<FilePreview | null>(null);
+  const [analysis, setAnalysis] = useState<UploadResult | null>(null);
   const [error, setError] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   async function handleFileChange(
     event: React.ChangeEvent<HTMLInputElement>,
@@ -19,6 +30,7 @@ function UploadLogs() {
 
     setError("");
     setPreview(null);
+    setAnalysis(null);
 
     if (!file) return;
 
@@ -40,6 +52,7 @@ function UploadLogs() {
         .filter((line) => line.trim() !== "");
 
       setPreview({
+        file,
         name: file.name,
         size: `${(file.size / 1024).toFixed(2)} KB`,
         entries: logLines.length,
@@ -47,6 +60,27 @@ function UploadLogs() {
       });
     } catch {
       setError("SentinelAI could not read this file.");
+    }
+  }
+
+  async function handleAnalyze() {
+    if (!preview) return;
+
+    setError("");
+    setAnalysis(null);
+    setIsAnalyzing(true);
+
+    try {
+      const result = await uploadLog(preview.file);
+      setAnalysis(result);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "SentinelAI could not connect to the backend.",
+      );
+    } finally {
+      setIsAnalyzing(false);
     }
   }
 
@@ -92,7 +126,7 @@ function UploadLogs() {
               <div>
                 <h2 className="text-xl font-semibold">{preview.name}</h2>
                 <p className="text-sm text-slate-400">
-                  {preview.size} · {preview.entries} log entries
+                  {preview.size} · {preview.entries} local preview entries
                 </p>
               </div>
             </div>
@@ -114,10 +148,60 @@ function UploadLogs() {
 
             <button
               type="button"
-              className="mt-6 rounded-lg bg-blue-600 px-5 py-3 font-medium transition hover:bg-blue-700"
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+              className="mt-6 flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-medium transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Analyze Logs
+              {isAnalyzing ? (
+                <>
+                  <LoaderCircle className="h-5 w-5 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                "Analyze Logs"
+              )}
             </button>
+          </div>
+        )}
+
+        {analysis && (
+          <div className="mt-8 rounded-xl border border-green-500/30 bg-green-500/10 p-6">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-7 w-7 text-green-400" />
+
+              <div>
+                <h2 className="text-xl font-semibold">
+                  Backend analysis complete
+                </h2>
+                <p className="mt-1 text-sm text-green-300">
+                  FastAPI successfully processed {analysis.filename}.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg bg-slate-950/60 p-4">
+                <p className="text-sm text-slate-400">Filename</p>
+                <p className="mt-1 font-semibold">{analysis.filename}</p>
+              </div>
+
+              <div className="rounded-lg bg-slate-950/60 p-4">
+                <p className="text-sm text-slate-400">Backend entries</p>
+                <p className="mt-1 text-2xl font-bold">
+                  {analysis.entries}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-lg bg-slate-950 p-4">
+              <p className="mb-3 text-sm font-semibold text-slate-300">
+                Backend preview
+              </p>
+
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap text-sm text-slate-400">
+                {analysis.preview.join("") || "The file is empty."}
+              </pre>
+            </div>
           </div>
         )}
       </div>
