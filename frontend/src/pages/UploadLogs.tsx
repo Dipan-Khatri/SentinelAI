@@ -2,7 +2,10 @@ import { useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  CircleAlert,
+  CircleCheck,
   FileText,
+  Info,
   LoaderCircle,
   ShieldAlert,
   ShieldCheck,
@@ -12,6 +15,7 @@ import {
 import {
   uploadLog,
   type Detection,
+  type TimelineEvent,
   type UploadResult,
 } from "../services/api";
 
@@ -295,6 +299,32 @@ function UploadLogs() {
                 </div>
               </section>
             )}
+
+            <section className="mt-8 rounded-xl border border-slate-700 bg-slate-800 p-6">
+              <div>
+                <h2 className="text-2xl font-bold">
+                  Investigation Timeline
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-400">
+                  Chronological authentication events and detection
+                  activity.
+                </p>
+              </div>
+
+              <div className="relative mt-8">
+                <div className="absolute bottom-0 left-5 top-0 w-px bg-slate-700" />
+
+                <div className="space-y-6">
+                  {analysis.timeline.map((event, index) => (
+                    <TimelineItem
+                      key={`${event.line_number}-${index}`}
+                      event={event}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
           </>
         )}
       </div>
@@ -468,6 +498,141 @@ function DetailCard({
       </p>
     </div>
   );
+}
+
+type TimelineItemProps = {
+  event: TimelineEvent;
+};
+
+function TimelineItem({
+  event,
+}: TimelineItemProps) {
+  const timelineStyle = getTimelineStyle(event.event_type);
+  const TimelineIcon = timelineStyle.icon;
+
+  return (
+    <article className="relative flex gap-5">
+      <div
+        className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${timelineStyle.circle}`}
+      >
+        <TimelineIcon className="h-5 w-5" />
+      </div>
+
+      <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              {event.timestamp}
+            </p>
+
+            <h3 className="mt-1 text-lg font-semibold">
+              {event.title}
+            </h3>
+          </div>
+
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${timelineStyle.badge}`}
+          >
+            {event.status}
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {event.user && (
+            <TimelineDetail
+              label="User"
+              value={event.user}
+            />
+          )}
+
+          {event.ip && (
+            <TimelineDetail
+              label="Source IP"
+              value={event.ip}
+              className="font-mono text-red-300"
+            />
+          )}
+
+          {event.method && (
+            <TimelineDetail
+              label="Authentication"
+              value={event.method}
+            />
+          )}
+        </div>
+
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm text-blue-400 hover:text-blue-300">
+            View raw log evidence
+          </summary>
+
+          <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-4 text-xs text-slate-400">
+            {event.raw}
+          </pre>
+        </details>
+      </div>
+    </article>
+  );
+}
+
+type TimelineDetailProps = {
+  label: string;
+  value: string;
+  className?: string;
+};
+
+function TimelineDetail({
+  label,
+  value,
+  className = "text-white",
+}: TimelineDetailProps) {
+  return (
+    <div>
+      <p className="text-xs text-slate-500">{label}</p>
+
+      <p className={`mt-1 text-sm font-semibold ${className}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function getTimelineStyle(
+  eventType: TimelineEvent["event_type"],
+) {
+  switch (eventType) {
+    case "failed_login":
+      return {
+        icon: CircleAlert,
+        circle:
+          "border-red-500/50 bg-red-500/20 text-red-400",
+        badge: "bg-red-500/20 text-red-300",
+      };
+
+    case "successful_login":
+      return {
+        icon: CircleCheck,
+        circle:
+          "border-green-500/50 bg-green-500/20 text-green-400",
+        badge: "bg-green-500/20 text-green-300",
+      };
+
+    case "detection":
+      return {
+        icon: ShieldAlert,
+        circle:
+          "border-amber-500/50 bg-amber-500/20 text-amber-400",
+        badge: "bg-amber-500/20 text-amber-300",
+      };
+
+    default:
+      return {
+        icon: Info,
+        circle:
+          "border-blue-500/50 bg-blue-500/20 text-blue-400",
+        badge: "bg-blue-500/20 text-blue-300",
+      };
+  }
 }
 
 export default UploadLogs;
