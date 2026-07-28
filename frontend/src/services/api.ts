@@ -1,9 +1,39 @@
 const API_URL = "http://127.0.0.1:8000";
 
+export type SuspiciousIp = {
+  ip: string;
+  attempts: number;
+  targeted_users: string[];
+};
+
+export type Detection = {
+  type: string;
+  severity: "Critical" | "High" | "Medium" | "Low";
+  mitre_id: string;
+  description: string;
+  confidence: number;
+  source_ip: string | null;
+  affected_users: string[];
+  event_count: number;
+  recommendations: string[];
+};
+
+export type SeveritySummary = {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+};
+
 export type UploadResult = {
   filename: string;
   entries: number;
   preview: string[];
+  failed_logins: number;
+  successful_logins: number;
+  suspicious_ips: SuspiciousIp[];
+  detections: Detection[];
+  severity_summary: SeveritySummary;
 };
 
 export async function uploadLog(file: File): Promise<UploadResult> {
@@ -16,7 +46,19 @@ export async function uploadLog(file: File): Promise<UploadResult> {
   });
 
   if (!response.ok) {
-    throw new Error("The backend could not analyze this file.");
+    let message = "The backend could not analyze this file.";
+
+    try {
+      const errorData = await response.json();
+
+      if (typeof errorData.detail === "string") {
+        message = errorData.detail;
+      }
+    } catch {
+      // Keep the default error message.
+    }
+
+    throw new Error(message);
   }
 
   return response.json();

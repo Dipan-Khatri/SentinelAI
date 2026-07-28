@@ -1,13 +1,19 @@
 import { useState } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   FileText,
   LoaderCircle,
+  ShieldAlert,
   ShieldCheck,
   Upload,
 } from "lucide-react";
 
-import { uploadLog, type UploadResult } from "../services/api";
+import {
+  uploadLog,
+  type Detection,
+  type UploadResult,
+} from "../services/api";
 
 type FilePreview = {
   file: File;
@@ -15,6 +21,13 @@ type FilePreview = {
   size: string;
   entries: number;
   lines: string[];
+};
+
+const severityStyles: Record<Detection["severity"], string> = {
+  Critical: "border-red-400 bg-red-500/20 text-red-200",
+  High: "border-red-500/60 bg-red-500/15 text-red-300",
+  Medium: "border-amber-500/60 bg-amber-500/15 text-amber-300",
+  Low: "border-blue-500/60 bg-blue-500/15 text-blue-300",
 };
 
 function UploadLogs() {
@@ -35,6 +48,7 @@ function UploadLogs() {
     if (!file) return;
 
     const allowedExtensions = [".log", ".txt", ".csv", ".json"];
+
     const extension = file.name
       .slice(file.name.lastIndexOf("."))
       .toLowerCase();
@@ -47,6 +61,7 @@ function UploadLogs() {
 
     try {
       const content = await file.text();
+
       const logLines = content
         .split(/\r?\n/)
         .filter((line) => line.trim() !== "");
@@ -86,11 +101,12 @@ function UploadLogs() {
 
   return (
     <div className="min-h-screen bg-slate-900 p-8 text-white">
-      <div className="max-w-4xl">
+      <div className="mx-auto max-w-6xl">
         <h1 className="text-3xl font-bold">Upload Security Logs</h1>
 
         <p className="mt-2 text-slate-400">
-          Import log data for validation, detection, and investigation.
+          Import authentication logs for validation, threat detection,
+          and investigation.
         </p>
 
         <label className="mt-8 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-600 bg-slate-800 px-6 py-14 transition hover:border-blue-500 hover:bg-slate-800/80">
@@ -119,14 +135,15 @@ function UploadLogs() {
         )}
 
         {preview && (
-          <div className="mt-8 rounded-xl bg-slate-800 p-6 shadow-lg">
+          <section className="mt-8 rounded-xl bg-slate-800 p-6 shadow-lg">
             <div className="flex items-center gap-3">
               <FileText className="h-7 w-7 text-blue-500" />
 
               <div>
                 <h2 className="text-xl font-semibold">{preview.name}</h2>
+
                 <p className="text-sm text-slate-400">
-                  {preview.size} · {preview.entries} local preview entries
+                  {preview.size} · {preview.entries} local entries
                 </p>
               </div>
             </div>
@@ -161,50 +178,294 @@ function UploadLogs() {
                 "Analyze Logs"
               )}
             </button>
-          </div>
+          </section>
         )}
 
         {analysis && (
-          <div className="mt-8 rounded-xl border border-green-500/30 bg-green-500/10 p-6">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-7 w-7 text-green-400" />
+          <>
+            <section className="mt-8 rounded-xl border border-green-500/30 bg-green-500/10 p-6">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="h-7 w-7 text-green-400" />
 
-              <div>
-                <h2 className="text-xl font-semibold">
-                  Backend analysis complete
-                </h2>
-                <p className="mt-1 text-sm text-green-300">
-                  FastAPI successfully processed {analysis.filename}.
-                </p>
-              </div>
-            </div>
+                <div>
+                  <h2 className="text-xl font-semibold">
+                    Backend analysis complete
+                  </h2>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-lg bg-slate-950/60 p-4">
-                <p className="text-sm text-slate-400">Filename</p>
-                <p className="mt-1 font-semibold">{analysis.filename}</p>
+                  <p className="mt-1 text-sm text-green-300">
+                    SentinelAI successfully analyzed {analysis.filename}.
+                  </p>
+                </div>
               </div>
 
-              <div className="rounded-lg bg-slate-950/60 p-4">
-                <p className="text-sm text-slate-400">Backend entries</p>
-                <p className="mt-1 text-2xl font-bold">
-                  {analysis.entries}
-                </p>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <MetricCard
+                  title="Log entries"
+                  value={analysis.entries}
+                />
+
+                <MetricCard
+                  title="Failed logins"
+                  value={analysis.failed_logins}
+                  valueClass="text-orange-400"
+                />
+
+                <MetricCard
+                  title="Successful logins"
+                  value={analysis.successful_logins}
+                  valueClass="text-green-400"
+                />
+
+                <MetricCard
+                  title="Detections"
+                  value={analysis.detections.length}
+                  valueClass="text-red-400"
+                />
               </div>
-            </div>
 
-            <div className="mt-5 rounded-lg bg-slate-950 p-4">
-              <p className="mb-3 text-sm font-semibold text-slate-300">
-                Backend preview
-              </p>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <SeverityCard
+                  label="Critical"
+                  count={analysis.severity_summary.critical}
+                  className="text-red-300"
+                />
 
-              <pre className="max-h-56 overflow-auto whitespace-pre-wrap text-sm text-slate-400">
-                {analysis.preview.join("") || "The file is empty."}
-              </pre>
-            </div>
-          </div>
+                <SeverityCard
+                  label="High"
+                  count={analysis.severity_summary.high}
+                  className="text-red-400"
+                />
+
+                <SeverityCard
+                  label="Medium"
+                  count={analysis.severity_summary.medium}
+                  className="text-amber-400"
+                />
+
+                <SeverityCard
+                  label="Low"
+                  count={analysis.severity_summary.low}
+                  className="text-blue-400"
+                />
+              </div>
+            </section>
+
+            {analysis.detections.length > 0 ? (
+              <section className="mt-8 rounded-xl border border-red-500/40 bg-red-500/10 p-6">
+                <div className="flex items-center gap-3">
+                  <ShieldAlert className="h-8 w-8 text-red-400" />
+
+                  <div>
+                    <h2 className="text-2xl font-bold">
+                      Threat Detections
+                    </h2>
+
+                    <p className="text-sm text-red-300">
+                      SentinelAI identified{" "}
+                      {analysis.detections.length} suspicious behavior
+                      pattern(s).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-5">
+                  {analysis.detections.map((detection, index) => (
+                    <DetectionCard
+                      key={`${detection.type}-${detection.source_ip}-${index}`}
+                      detection={detection}
+                      number={index + 1}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <section className="mt-8 rounded-xl border border-green-500/30 bg-green-500/10 p-6">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="h-7 w-7 text-green-400" />
+
+                  <div>
+                    <h2 className="text-xl font-semibold">
+                      No threats detected
+                    </h2>
+
+                    <p className="text-sm text-green-300">
+                      No activity matched the current detection rules.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            )}
+          </>
         )}
       </div>
+    </div>
+  );
+}
+
+type MetricCardProps = {
+  title: string;
+  value: number;
+  valueClass?: string;
+};
+
+function MetricCard({
+  title,
+  value,
+  valueClass = "text-white",
+}: MetricCardProps) {
+  return (
+    <div className="rounded-lg bg-slate-950/60 p-4">
+      <p className="text-sm text-slate-400">{title}</p>
+
+      <p className={`mt-1 text-2xl font-bold ${valueClass}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+type SeverityCardProps = {
+  label: string;
+  count: number;
+  className: string;
+};
+
+function SeverityCard({
+  label,
+  count,
+  className,
+}: SeverityCardProps) {
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-4">
+      <p className="text-sm text-slate-400">{label}</p>
+
+      <p className={`mt-1 text-xl font-bold ${className}`}>
+        {count}
+      </p>
+    </div>
+  );
+}
+
+type DetectionCardProps = {
+  detection: Detection;
+  number: number;
+};
+
+function DetectionCard({
+  detection,
+  number,
+}: DetectionCardProps) {
+  return (
+    <article className="rounded-xl border border-slate-700 bg-slate-950/70 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-slate-500">
+            Detection #{number}
+          </p>
+
+          <h3 className="mt-1 text-xl font-bold">
+            {detection.type}
+          </h3>
+        </div>
+
+        <span
+          className={`rounded-full border px-3 py-1 text-sm font-semibold ${
+            severityStyles[detection.severity]
+          }`}
+        >
+          {detection.severity}
+        </span>
+      </div>
+
+      <p className="mt-4 text-slate-300">
+        {detection.description}
+      </p>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <DetailCard
+          label="MITRE ATT&CK"
+          value={detection.mitre_id}
+          valueClass="text-blue-400"
+        />
+
+        <DetailCard
+          label="Confidence"
+          value={`${detection.confidence}%`}
+          valueClass="text-green-400"
+        />
+
+        <DetailCard
+          label="Source IP"
+          value={detection.source_ip ?? "Not available"}
+          valueClass="font-mono text-red-300"
+        />
+
+        <DetailCard
+          label="Event count"
+          value={String(detection.event_count)}
+        />
+      </div>
+
+      <div className="mt-5">
+        <p className="text-sm font-semibold text-slate-300">
+          Affected accounts
+        </p>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {detection.affected_users.length > 0 ? (
+            detection.affected_users.map((user) => (
+              <span
+                key={user}
+                className="rounded-md bg-slate-800 px-3 py-1 text-sm text-slate-200"
+              >
+                {user}
+              </span>
+            ))
+          ) : (
+            <span className="text-sm text-slate-500">
+              No account identified
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-5">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-amber-400" />
+
+          <h4 className="font-semibold text-amber-300">
+            Recommended actions
+          </h4>
+        </div>
+
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
+          {detection.recommendations.map((recommendation) => (
+            <li key={recommendation}>{recommendation}</li>
+          ))}
+        </ul>
+      </div>
+    </article>
+  );
+}
+
+type DetailCardProps = {
+  label: string;
+  value: string;
+  valueClass?: string;
+};
+
+function DetailCard({
+  label,
+  value,
+  valueClass = "text-white",
+}: DetailCardProps) {
+  return (
+    <div className="rounded-lg bg-slate-900 p-4">
+      <p className="text-sm text-slate-400">{label}</p>
+
+      <p className={`mt-1 break-words font-semibold ${valueClass}`}>
+        {value}
+      </p>
     </div>
   );
 }
