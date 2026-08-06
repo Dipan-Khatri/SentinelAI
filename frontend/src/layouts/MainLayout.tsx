@@ -4,20 +4,14 @@ type MainLayoutProps = {
   children: React.ReactNode;
 };
 
-function MainLayout({ children }: MainLayoutProps) {
+function MainLayout({
+  children,
+}: MainLayoutProps) {
   return (
-    <div style={{ display: "flex" }}>
+    <div className="flex min-h-screen bg-slate-900">
       <Sidebar />
 
-      <main
-        style={{
-          flex: 1,
-          padding: "30px",
-          background: "#0F172A",
-          color: "white",
-          minHeight: "100vh",
-        }}
-      >
+      <main className="min-w-0 flex-1 bg-slate-900 text-white">
         {children}
       </main>
     </div>

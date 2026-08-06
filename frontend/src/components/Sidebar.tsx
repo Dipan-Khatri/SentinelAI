@@ -1,3 +1,5 @@
+import logo from "../assets/logo.png";
+
 import {
   ClipboardList,
   Database,
@@ -5,12 +7,15 @@ import {
   LayoutDashboard,
   Search,
   Settings,
-  Shield,
   Target,
   Upload,
 } from "lucide-react";
-import { NavLink } from "react-router-dom";
 
+import {
+  NavLink,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 const navigationItems = [
   {
@@ -19,49 +24,42 @@ const navigationItems = [
     icon: LayoutDashboard,
     end: true,
   },
-
   {
     name: "Case Queue",
     path: "/cases",
     icon: ClipboardList,
     end: false,
   },
-
   {
     name: "Investigations",
     path: "/investigations",
     icon: Search,
     end: false,
   },
-
   {
     name: "Upload Logs",
     path: "/upload",
     icon: Upload,
     end: false,
   },
-
   {
     name: "MITRE Explorer",
     path: "/mitre",
     icon: Target,
     end: false,
   },
-
   {
     name: "Reports",
     path: "/reports",
     icon: FileText,
     end: false,
   },
-
   {
     name: "History",
     path: "/history",
     icon: Database,
     end: false,
   },
-
   {
     name: "Settings",
     path: "/settings",
@@ -70,30 +68,39 @@ const navigationItems = [
   },
 ];
 
-
 function Sidebar() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  function handleLogoClick() {
+    if (location.pathname === "/") {
+      window.location.reload();
+    } else {
+      navigate("/");
+    }
+  }
+
   return (
     <aside className="sticky top-0 flex h-screen w-[280px] shrink-0 flex-col border-r border-slate-800 bg-slate-950 px-5 py-6 text-white">
-      <NavLink
-        to="/"
-        className="flex items-center gap-3 rounded-lg px-3 py-2"
+
+      {/* ================= LOGO ================= */}
+
+      <button
+        type="button"
+        onClick={handleLogoClick}
+        className="mb-6 flex w-full justify-center transition-transform duration-300 hover:scale-105"
       >
-        <div className="rounded-lg bg-blue-500/15 p-2">
-          <Shield className="h-6 w-6 text-blue-400" />
-        </div>
+        <img
+          src={logo}
+          alt="SentinelAI"
+          draggable={false}
+          className="w-60 object-contain select-none"
+        />
+      </button>
 
-        <div>
-          <h1 className="text-lg font-bold">
-            SentinelAI
-          </h1>
+      {/* ================= NAVIGATION ================= */}
 
-          <p className="text-xs text-slate-500">
-            Security Operations
-          </p>
-        </div>
-      </NavLink>
-
-      <nav className="mt-8">
+      <nav className="mt-2">
         <p className="px-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
           Workspace
         </p>
@@ -107,11 +114,9 @@ function Sidebar() {
                 <NavLink
                   to={item.path}
                   end={item.end}
-                  className={({
-                    isActive,
-                  }) =>
+                  className={({ isActive }) =>
                     [
-                      "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition",
+                      "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200",
 
                       isActive
                         ? "bg-blue-600 text-white shadow-lg shadow-blue-950/30"
@@ -121,9 +126,7 @@ function Sidebar() {
                 >
                   <Icon className="h-5 w-5 shrink-0" />
 
-                  <span>
-                    {item.name}
-                  </span>
+                  <span>{item.name}</span>
                 </NavLink>
               </li>
             );
@@ -131,9 +134,11 @@ function Sidebar() {
         </ul>
       </nav>
 
+      {/* ================= FOOTER ================= */}
+
       <div className="mt-auto rounded-xl border border-slate-800 bg-slate-900/70 p-4">
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
+          <span className="h-2.5 w-2.5 rounded-full bg-green-400 animate-pulse" />
 
           <p className="text-sm font-medium text-green-300">
             System Online
@@ -141,13 +146,12 @@ function Sidebar() {
         </div>
 
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          FastAPI and SQLite persistence are
-          enabled.
+          FastAPI and SQLite persistence are enabled.
         </p>
       </div>
+
     </aside>
   );
 }
-
 
 export default Sidebar;

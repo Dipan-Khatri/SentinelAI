@@ -1,7 +1,6 @@
 import {
   Bot,
   BrainCircuit,
-  CheckCircle2,
   ChevronRight,
   CircleUserRound,
   LoaderCircle,
@@ -10,15 +9,16 @@ import {
   ShieldAlert,
   Sparkles,
   Trash2,
+  
 } from "lucide-react";
 import {
-  FormEvent,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 
+import type { FormEvent } from "react";
 import type { UploadResult } from "../../services/api";
 
 type AICopilotProps = {

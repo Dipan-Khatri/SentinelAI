@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
-  ExternalLink,
   Filter,
   Network,
   Search,

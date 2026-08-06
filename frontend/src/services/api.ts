@@ -1,4 +1,5 @@
-const API_URL = "http://127.0.0.1:8000";
+const API_URL =
+  import.meta.env.VITE_API_URL?.trim() ?? "";
 
 const SETTINGS_STORAGE_KEY =
   "sentinelai_detection_settings";
@@ -160,6 +161,25 @@ export type UpdateInvestigationPayload = {
   completed_actions: string[];
 };
 
+export type ThreatIntelligenceResponse = {
+  ip: string;
+  country_code: string | null;
+  country: string | null;
+  continent_code: string | null;
+  continent: string | null;
+  asn: string | null;
+  organization: string | null;
+  organization_domain: string | null;
+  source: string;
+  cached: boolean;
+  recommendation: string;
+};
+
+export type ClearThreatIntelligenceCacheResponse = {
+  message: string;
+  removed_entries: number;
+};
+
 const DEFAULT_SETTINGS: DetectionSettings = {
   bruteForceThreshold: 3,
   passwordSprayingThreshold: 3,
@@ -229,9 +249,27 @@ function getDetectionSettings(): DetectionSettings {
       },
     };
   } catch {
-    localStorage.removeItem(SETTINGS_STORAGE_KEY);
+    localStorage.removeItem(
+      SETTINGS_STORAGE_KEY,
+    );
+
     return DEFAULT_SETTINGS;
   }
+}
+
+function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith("/")
+    ? path
+    : `/${path}`;
+
+  if (!API_URL) {
+    return normalizedPath;
+  }
+
+  return `${API_URL.replace(
+    /\/+$/,
+    "",
+  )}${normalizedPath}`;
 }
 
 async function getErrorMessage(
@@ -258,6 +296,27 @@ async function getErrorMessage(
   return fallbackMessage;
 }
 
+async function apiFetch(
+  path: string,
+  options?: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(
+      buildApiUrl(path),
+      options,
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown network error.";
+
+    throw new Error(
+      `SentinelAI could not connect to the backend. ${message}`,
+    );
+  }
+}
+
 export async function uploadLog(
   file: File,
 ): Promise<UploadResult> {
@@ -271,8 +330,8 @@ export async function uploadLog(
     JSON.stringify(settings),
   );
 
-  const response = await fetch(
-    `${API_URL}/api/upload`,
+  const response = await apiFetch(
+    "/api/upload",
     {
       method: "POST",
       body: formData,
@@ -294,8 +353,8 @@ export async function uploadLog(
 export async function getAnalyses(): Promise<
   AnalysisHistoryItem[]
 > {
-  const response = await fetch(
-    `${API_URL}/api/analyses`,
+  const response = await apiFetch(
+    "/api/analyses",
   );
 
   if (!response.ok) {
@@ -315,8 +374,8 @@ export async function getAnalyses(): Promise<
 export async function getAnalysisById(
   analysisId: number,
 ): Promise<HistoricalAnalysisDetail> {
-  const response = await fetch(
-    `${API_URL}/api/analyses/${analysisId}`,
+  const response = await apiFetch(
+    `/api/analyses/${analysisId}`,
   );
 
   if (!response.ok) {
@@ -336,8 +395,8 @@ export async function getAnalysisById(
 export async function deleteAnalysis(
   analysisId: number,
 ): Promise<DeleteAnalysisResponse> {
-  const response = await fetch(
-    `${API_URL}/api/analyses/${analysisId}`,
+  const response = await apiFetch(
+    `/api/analyses/${analysisId}`,
     {
       method: "DELETE",
     },
@@ -361,13 +420,14 @@ export async function getInvestigation(
   analysisId: number,
   detectionId: number,
 ): Promise<Investigation | null> {
-  const searchParameters = new URLSearchParams({
-    analysis_id: String(analysisId),
-    detection_id: String(detectionId),
-  });
+  const searchParameters =
+    new URLSearchParams({
+      analysis_id: String(analysisId),
+      detection_id: String(detectionId),
+    });
 
-  const response = await fetch(
-    `${API_URL}/api/investigations/lookup?${searchParameters.toString()}`,
+  const response = await apiFetch(
+    `/api/investigations/lookup?${searchParameters.toString()}`,
   );
 
   if (!response.ok) {
@@ -387,12 +447,12 @@ export async function getInvestigation(
 export async function getInvestigations(
   analysisId?: number,
 ): Promise<Investigation[]> {
-  const url =
+  const path =
     analysisId === undefined
-      ? `${API_URL}/api/investigations`
-      : `${API_URL}/api/investigations?analysis_id=${analysisId}`;
+      ? "/api/investigations"
+      : `/api/investigations?analysis_id=${analysisId}`;
 
-  const response = await fetch(url);
+  const response = await apiFetch(path);
 
   if (!response.ok) {
     const message = await getErrorMessage(
@@ -403,14 +463,16 @@ export async function getInvestigations(
     throw new Error(message);
   }
 
-  return response.json() as Promise<Investigation[]>;
+  return response.json() as Promise<
+    Investigation[]
+  >;
 }
 
 export async function saveInvestigation(
   payload: SaveInvestigationPayload,
 ): Promise<Investigation> {
-  const response = await fetch(
-    `${API_URL}/api/investigations`,
+  const response = await apiFetch(
+    "/api/investigations",
     {
       method: "POST",
       headers: {
@@ -436,8 +498,8 @@ export async function updateInvestigation(
   investigationId: number,
   payload: UpdateInvestigationPayload,
 ): Promise<Investigation> {
-  const response = await fetch(
-    `${API_URL}/api/investigations/${investigationId}`,
+  const response = await apiFetch(
+    `/api/investigations/${investigationId}`,
     {
       method: "PUT",
       headers: {
@@ -459,24 +521,81 @@ export async function updateInvestigation(
   return response.json() as Promise<Investigation>;
 }
 
+export async function getThreatIntelligence(
+  ipAddress: string,
+): Promise<ThreatIntelligenceResponse> {
+  const normalizedIp = ipAddress.trim();
+
+  if (!normalizedIp) {
+    throw new Error(
+      "An IP address is required for threat-intelligence enrichment.",
+    );
+  }
+
+  const response = await apiFetch(
+    `/api/threat-intel/${encodeURIComponent(
+      normalizedIp,
+    )}`,
+  );
+
+  if (!response.ok) {
+    const message = await getErrorMessage(
+      response,
+      "SentinelAI could not enrich this IP address.",
+    );
+
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<
+    ThreatIntelligenceResponse
+  >;
+}
+
+export async function clearThreatIntelligenceCache(): Promise<
+  ClearThreatIntelligenceCacheResponse
+> {
+  const response = await apiFetch(
+    "/api/threat-intel/cache",
+    {
+      method: "DELETE",
+    },
+  );
+
+  if (!response.ok) {
+    const message = await getErrorMessage(
+      response,
+      "SentinelAI could not clear the threat-intelligence cache.",
+    );
+
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<
+    ClearThreatIntelligenceCacheResponse
+  >;
+}
+
 export function historicalAnalysisToUploadResult(
   historicalAnalysis: HistoricalAnalysisDetail,
 ): UploadResult {
   const severitySummary: SeveritySummary = {
-    critical: historicalAnalysis.detections.filter(
-      (detection) =>
-        detection.severity === "Critical",
-    ).length,
+    critical:
+      historicalAnalysis.detections.filter(
+        (detection) =>
+          detection.severity === "Critical",
+      ).length,
 
     high: historicalAnalysis.detections.filter(
       (detection) =>
         detection.severity === "High",
     ).length,
 
-    medium: historicalAnalysis.detections.filter(
-      (detection) =>
-        detection.severity === "Medium",
-    ).length,
+    medium:
+      historicalAnalysis.detections.filter(
+        (detection) =>
+          detection.severity === "Medium",
+      ).length,
 
     low: historicalAnalysis.detections.filter(
       (detection) =>
@@ -505,23 +624,27 @@ export function historicalAnalysisToUploadResult(
           detection.event_count,
         );
 
-        existingIp.targeted_users = Array.from(
-          new Set([
-            ...existingIp.targeted_users,
-            ...detection.affected_users,
-          ]),
-        );
+        existingIp.targeted_users =
+          Array.from(
+            new Set([
+              ...existingIp.targeted_users,
+              ...detection.affected_users,
+            ]),
+          );
 
         return;
       }
 
-      suspiciousIpMap.set(detection.source_ip, {
-        ip: detection.source_ip,
-        attempts: detection.event_count,
-        targeted_users: [
-          ...detection.affected_users,
-        ],
-      });
+      suspiciousIpMap.set(
+        detection.source_ip,
+        {
+          ip: detection.source_ip,
+          attempts: detection.event_count,
+          targeted_users: [
+            ...detection.affected_users,
+          ],
+        },
+      );
     },
   );
 
@@ -538,10 +661,14 @@ export function historicalAnalysisToUploadResult(
     suspicious_ips: Array.from(
       suspiciousIpMap.values(),
     ),
-    detections: historicalAnalysis.detections,
+    detections:
+      historicalAnalysis.detections,
     severity_summary: severitySummary,
-    risk_score: historicalAnalysis.risk_score,
-    risk_level: historicalAnalysis.risk_level,
-    timeline: historicalAnalysis.timeline ?? [],
+    risk_score:
+      historicalAnalysis.risk_score,
+    risk_level:
+      historicalAnalysis.risk_level,
+    timeline:
+      historicalAnalysis.timeline ?? [],
   };
 }

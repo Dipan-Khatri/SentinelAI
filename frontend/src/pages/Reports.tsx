@@ -1,900 +1,1574 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  ChevronRight,
-  Clock3,
   Download,
-  FileSearch,
   FileText,
-  Network,
-  Printer,
-  ShieldAlert,
-  Target,
-  UserRound,
+  Loader2,
+  RefreshCcw,
 } from "lucide-react";
 
-import type {
-  Detection,
-  TimelineEvent,
-  UploadResult,
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+
+import AnalystPerformance from "../components/reports/AnalystPerformance";
+import ExecutiveExport from "../components/reports/ExecutiveExport";
+import ExecutiveOverview from "../components/reports/ExecutiveOverview";
+import MitreCoverage from "../components/reports/MitreCoverage";
+import ThreatTrendChart from "../components/reports/ThreatTrendChart";
+import TopThreatActors from "../components/reports/TopThreatActors";
+
+import {
+  getInvestigations,
+  type Investigation,
+  type UploadResult,
 } from "../services/api";
 
-const ANALYSIS_STORAGE_KEY = "sentinelai_latest_analysis";
-const INVESTIGATION_STORAGE_KEY =
-  "sentinelai_investigation_state";
+const ANALYSIS_STORAGE_KEY =
+  "sentinelai_latest_analysis";
 
-type InvestigationStatus =
-  | "Open"
-  | "In Progress"
-  | "Resolved"
-  | "False Positive";
-
-type SavedInvestigationState = {
-  selectedDetectionIndex: number;
-  status: InvestigationStatus;
-  notes: string;
-  completedActions: string[];
-};
-
-const severityStyles: Record<Detection["severity"], string> = {
-  Critical: "border-red-500/40 bg-red-500/15 text-red-300",
-  High: "border-orange-500/40 bg-orange-500/15 text-orange-300",
-  Medium: "border-amber-500/40 bg-amber-500/15 text-amber-300",
-  Low: "border-blue-500/40 bg-blue-500/15 text-blue-300",
-};
-
-const statusStyles: Record<InvestigationStatus, string> = {
-  Open: "border-red-500/40 bg-red-500/15 text-red-300",
-  "In Progress":
-    "border-amber-500/40 bg-amber-500/15 text-amber-300",
-  Resolved:
-    "border-green-500/40 bg-green-500/15 text-green-300",
-  "False Positive":
-    "border-slate-500/40 bg-slate-500/15 text-slate-300",
+type PdfDocumentWithTable = jsPDF & {
+  lastAutoTable?: {
+    finalY: number;
+  };
 };
 
 function Reports() {
-  const [analysis, setAnalysis] = useState<UploadResult | null>(null);
-  const [investigation, setInvestigation] =
-    useState<SavedInvestigationState | null>(null);
+  const [analysis, setAnalysis] =
+    useState<UploadResult | null>(null);
 
-  useEffect(() => {
-    const savedAnalysis = localStorage.getItem(
-      ANALYSIS_STORAGE_KEY,
-    );
+  const [
+    investigations,
+    setInvestigations,
+  ] = useState<Investigation[]>([]);
 
-    if (savedAnalysis) {
-      try {
-        setAnalysis(
-          JSON.parse(savedAnalysis) as UploadResult,
-        );
-      } catch {
-        localStorage.removeItem(ANALYSIS_STORAGE_KEY);
-      }
-    }
+  const [isLoading, setIsLoading] =
+    useState(true);
 
-    const savedInvestigation = localStorage.getItem(
-      INVESTIGATION_STORAGE_KEY,
-    );
+  const [
+    isGenerating,
+    setIsGenerating,
+  ] = useState(false);
 
-    if (savedInvestigation) {
-      try {
-        setInvestigation(
-          JSON.parse(
-            savedInvestigation,
-          ) as SavedInvestigationState,
-        );
-      } catch {
-        localStorage.removeItem(
-          INVESTIGATION_STORAGE_KEY,
-        );
-      }
-    }
-  }, []);
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
 
-  const selectedDetection = useMemo(() => {
-    if (!analysis || analysis.detections.length === 0) {
-      return null;
-    }
+  async function loadReportData() {
+    setIsLoading(true);
+    setErrorMessage("");
 
-    const selectedIndex =
-      investigation?.selectedDetectionIndex ?? 0;
+    const savedAnalysis =
+      localStorage.getItem(
+        ANALYSIS_STORAGE_KEY,
+      );
 
-    return (
-      analysis.detections[selectedIndex] ??
-      analysis.detections[0]
-    );
-  }, [analysis, investigation]);
-
-  const relatedTimeline = useMemo(() => {
-    if (!analysis || !selectedDetection) {
-      return [];
-    }
-
-    return analysis.timeline.filter((event) => {
-      const sourceMatches =
-        selectedDetection.source_ip &&
-        event.ip === selectedDetection.source_ip;
-
-      const userMatches =
-        selectedDetection.affected_users.some(
-          (user) => event.user?.includes(user),
-        );
-
-      return sourceMatches || userMatches;
-    });
-  }, [analysis, selectedDetection]);
-
-  const reportId = useMemo(() => {
-    if (!analysis || !selectedDetection) {
-      return "SENTINEL-UNAVAILABLE";
-    }
-
-    const sourcePart = selectedDetection.source_ip
-      ?.replaceAll(".", "")
-      .slice(-6);
-
-    return `SENTINEL-${analysis.entries}-${
-      sourcePart || "UNKNOWN"
-    }`;
-  }, [analysis, selectedDetection]);
-
-  const generatedDate = useMemo(() => {
-    return new Date().toLocaleString();
-  }, []);
-
-  function printReport() {
-    window.print();
-  }
-
-  function downloadTextReport() {
-    if (!analysis || !selectedDetection) {
+    if (!savedAnalysis) {
+      setAnalysis(null);
+      setInvestigations([]);
+      setIsLoading(false);
       return;
     }
 
-    const status = investigation?.status ?? "Open";
-    const notes =
-      investigation?.notes.trim() ||
-      "No analyst notes were recorded.";
+    try {
+      const parsedAnalysis =
+        JSON.parse(
+          savedAnalysis,
+        ) as UploadResult;
 
-    const completedActions =
-      investigation?.completedActions ?? [];
+      setAnalysis(parsedAnalysis);
 
-    const reportText = [
-      "SENTINELAI INCIDENT REPORT",
-      "========================================",
-      "",
-      `Report ID: ${reportId}`,
-      `Generated: ${generatedDate}`,
-      `Source File: ${analysis.filename}`,
-      "",
-      "INCIDENT SUMMARY",
-      "----------------------------------------",
-      `Title: ${selectedDetection.type}`,
-      `Severity: ${selectedDetection.severity}`,
-      `Status: ${status}`,
-      `Risk Score: ${analysis.risk_score}/100`,
-      `Risk Level: ${analysis.risk_level}`,
-      `Confidence: ${selectedDetection.confidence}%`,
-      "",
-      "TECHNICAL DETAILS",
-      "----------------------------------------",
-      `Source IP: ${
-        selectedDetection.source_ip ?? "Not available"
-      }`,
-      `MITRE ATT&CK: ${selectedDetection.mitre_id}`,
-      `Event Count: ${selectedDetection.event_count}`,
-      `Affected Users: ${
-        selectedDetection.affected_users.join(", ") ||
-        "None identified"
-      }`,
-      "",
-      "DETECTION DESCRIPTION",
-      "----------------------------------------",
-      selectedDetection.description,
-      "",
-      "RECOMMENDED ACTIONS",
-      "----------------------------------------",
-      ...selectedDetection.recommendations.map(
-        (recommendation, index) => {
-          const completed =
-            completedActions.includes(recommendation);
+    const savedInvestigations =
+  await getInvestigations();
 
-          return `${index + 1}. [${completed ? "COMPLETED" : "PENDING"}] ${recommendation}`;
+      setInvestigations(
+        savedInvestigations,
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "SentinelAI could not load report data.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadReportData();
+  }, []);
+
+  const highestRiskIp =
+    useMemo(() => {
+      if (
+        !analysis ||
+        analysis.suspicious_ips.length === 0
+      ) {
+        return null;
+      }
+
+      return [
+        ...analysis.suspicious_ips,
+      ].sort(
+        (
+          firstIp,
+          secondIp,
+        ) =>
+          secondIp.attempts -
+          firstIp.attempts,
+      )[0];
+    }, [analysis]);
+
+  const affectedUsers =
+    useMemo(() => {
+      if (!analysis) {
+        return [];
+      }
+
+      return Array.from(
+        new Set(
+          analysis.detections.flatMap(
+            (detection) =>
+              detection.affected_users ??
+              [],
+          ),
+        ),
+      );
+    }, [analysis]);
+
+  async function generatePdfReport() {
+    if (!analysis) {
+      return;
+    }
+
+    setIsGenerating(true);
+    setErrorMessage("");
+
+    try {
+      const document =
+        new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        }) as PdfDocumentWithTable;
+
+      const generatedAt =
+        new Date();
+
+      const pageWidth =
+        document.internal.pageSize.getWidth();
+
+      const pageHeight =
+        document.internal.pageSize.getHeight();
+
+      const margin = 16;
+
+      const contentWidth =
+        pageWidth - margin * 2;
+
+      function getTableEndY(
+        fallbackY: number,
+      ) {
+        return (
+          document.lastAutoTable
+            ?.finalY ?? fallbackY
+        );
+      }
+
+      function ensurePageSpace(
+        currentY: number,
+        requiredSpace: number,
+      ) {
+        if (
+          currentY +
+            requiredSpace >
+          pageHeight - 20
+        ) {
+          document.addPage();
+          return 20;
+        }
+
+        return currentY;
+      }
+
+      function addSectionTitle(
+        title: string,
+        yPosition: number,
+      ) {
+        document.setFont(
+          "helvetica",
+          "bold",
+        );
+
+        document.setFontSize(14);
+
+        document.setTextColor(
+          15,
+          23,
+          42,
+        );
+
+        document.text(
+          title,
+          margin,
+          yPosition,
+        );
+
+        document.setDrawColor(
+          37,
+          99,
+          235,
+        );
+
+        document.setLineWidth(0.5);
+
+        document.line(
+          margin,
+          yPosition + 2,
+          pageWidth - margin,
+          yPosition + 2,
+        );
+      }
+
+      document.setFillColor(
+        15,
+        23,
+        42,
+      );
+
+      document.rect(
+        0,
+        0,
+        pageWidth,
+        54,
+        "F",
+      );
+
+      document.setFont(
+        "helvetica",
+        "bold",
+      );
+
+      document.setFontSize(12);
+
+      document.setTextColor(
+        56,
+        189,
+        248,
+      );
+
+      document.text(
+        "SENTINELAI SECURITY OPERATIONS",
+        margin,
+        16,
+      );
+
+      document.setFontSize(23);
+
+      document.setTextColor(
+        255,
+        255,
+        255,
+      );
+
+      document.text(
+        "Executive SOC Report",
+        margin,
+        29,
+      );
+
+      document.setFont(
+        "helvetica",
+        "normal",
+      );
+
+      document.setFontSize(10);
+
+      document.setTextColor(
+        203,
+        213,
+        225,
+      );
+
+      document.text(
+        `Source: ${analysis.filename}`,
+        margin,
+        39,
+      );
+
+      document.text(
+        `Generated: ${generatedAt.toLocaleString()}`,
+        margin,
+        46,
+      );
+
+      const riskColor =
+        getRiskColor(
+          analysis.risk_level,
+        );
+
+      document.setFillColor(
+        riskColor[0],
+        riskColor[1],
+        riskColor[2],
+      );
+
+      document.roundedRect(
+        pageWidth - 54,
+        18,
+        38,
+        14,
+        3,
+        3,
+        "F",
+      );
+
+      document.setFont(
+        "helvetica",
+        "bold",
+      );
+
+      document.setFontSize(11);
+
+      document.setTextColor(
+        255,
+        255,
+        255,
+      );
+
+      document.text(
+        analysis.risk_level.toUpperCase(),
+        pageWidth - 35,
+        27,
+        {
+          align: "center",
         },
-      ),
-      "",
-      "ANALYST NOTES",
-      "----------------------------------------",
-      notes,
-      "",
-      "RELATED EVIDENCE",
-      "----------------------------------------",
-      ...relatedTimeline.map(
-        (event, index) =>
-          `${index + 1}. ${event.timestamp} | ${event.title} | ${event.status}\n` +
-          `   IP: ${event.ip ?? "N/A"} | User: ${
-            event.user ?? "N/A"
-          } | Method: ${event.method ?? "N/A"}\n` +
-          `   Raw: ${event.raw}`,
-      ),
-      "",
-      "ANALYSIS SUMMARY",
-      "----------------------------------------",
-      `Log Entries: ${analysis.entries}`,
-      `Failed Logins: ${analysis.failed_logins}`,
-      `Successful Logins: ${analysis.successful_logins}`,
-      `Total Detections: ${analysis.detections.length}`,
-      `Suspicious IPs: ${analysis.suspicious_ips.length}`,
-      "",
-      "Generated by SentinelAI",
-    ].join("\n");
+      );
 
-    const blob = new Blob([reportText], {
-      type: "text/plain;charset=utf-8",
-    });
+      let currentY = 67;
 
-    const downloadUrl = URL.createObjectURL(blob);
-    const downloadLink = document.createElement("a");
+      addSectionTitle(
+        "Executive Summary",
+        currentY,
+      );
 
-    downloadLink.href = downloadUrl;
-    downloadLink.download = `${reportId}-incident-report.txt`;
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    downloadLink.remove();
+      currentY += 9;
 
-    URL.revokeObjectURL(downloadUrl);
+      const executiveSummary =
+        buildExecutiveSummary(
+          analysis,
+          highestRiskIp?.ip,
+        );
+
+      document.setFont(
+        "helvetica",
+        "normal",
+      );
+
+      document.setFontSize(10);
+
+      document.setTextColor(
+        51,
+        65,
+        85,
+      );
+
+      const summaryLines =
+        document.splitTextToSize(
+          executiveSummary,
+          contentWidth,
+        ) as string[];
+
+      document.text(
+        summaryLines,
+        margin,
+        currentY,
+        {
+          lineHeightFactor: 1.45,
+        },
+      );
+
+      currentY +=
+        summaryLines.length * 6 +
+        8;
+
+      currentY =
+        ensurePageSpace(
+          currentY,
+          44,
+        );
+
+      addSectionTitle(
+        "Executive Metrics",
+        currentY,
+      );
+
+      autoTable(document, {
+        startY: currentY + 6,
+
+        margin: {
+          left: margin,
+          right: margin,
+        },
+
+        head: [
+          [
+            "Metric",
+            "Value",
+            "Metric",
+            "Value",
+          ],
+        ],
+
+        body: [
+          [
+            "Risk Score",
+            `${analysis.risk_score}/100`,
+            "Risk Level",
+            analysis.risk_level,
+          ],
+
+          [
+            "Total Events",
+            analysis.entries.toLocaleString(),
+            "Detections",
+            analysis.detections.length.toLocaleString(),
+          ],
+
+          [
+            "Failed Logins",
+            analysis.failed_logins.toLocaleString(),
+            "Successful Logins",
+            analysis.successful_logins.toLocaleString(),
+          ],
+
+          [
+            "Suspicious IPs",
+            analysis.suspicious_ips.length.toLocaleString(),
+            "Investigations",
+            investigations.length.toLocaleString(),
+          ],
+        ],
+
+        theme: "grid",
+
+        headStyles: {
+          fillColor: [
+            30,
+            64,
+            175,
+          ],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+
+        alternateRowStyles: {
+          fillColor: [
+            241,
+            245,
+            249,
+          ],
+        },
+
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+          textColor: [
+            51,
+            65,
+            85,
+          ],
+        },
+      });
+
+      currentY =
+        getTableEndY(
+          currentY + 35,
+        ) + 12;
+      if (
+        analysis.suspicious_ips.length > 0
+      ) {
+        currentY =
+          ensurePageSpace(
+            currentY,
+            48,
+          );
+
+        addSectionTitle(
+          "Top Threat Sources",
+          currentY,
+        );
+
+        autoTable(document, {
+          startY: currentY + 6,
+
+          margin: {
+            left: margin,
+            right: margin,
+          },
+
+          head: [
+            [
+              "IP Address",
+              "Attempts",
+              "Targeted Accounts",
+              "Priority",
+            ],
+          ],
+
+          body: [
+            ...analysis.suspicious_ips,
+          ]
+            .sort(
+              (
+                firstSource,
+                secondSource,
+              ) =>
+                secondSource.attempts -
+                firstSource.attempts,
+            )
+            .slice(0, 10)
+            .map((source) => [
+              source.ip,
+              source.attempts.toLocaleString(),
+              source.targeted_users
+                .join(", ") ||
+                "Unknown",
+              getIpPriority(
+                source.attempts,
+              ),
+            ]),
+
+          theme: "striped",
+
+          headStyles: {
+            fillColor: [
+              185,
+              28,
+              28,
+            ],
+            textColor: 255,
+            fontStyle: "bold",
+          },
+
+          alternateRowStyles: {
+            fillColor: [
+              254,
+              242,
+              242,
+            ],
+          },
+
+          styles: {
+            fontSize: 8.5,
+            cellPadding: 3,
+            overflow: "linebreak",
+            textColor: [
+              51,
+              65,
+              85,
+            ],
+          },
+
+          columnStyles: {
+            0: {
+              cellWidth: 42,
+            },
+
+            1: {
+              cellWidth: 24,
+            },
+
+            2: {
+              cellWidth: 78,
+            },
+
+            3: {
+              cellWidth: 30,
+            },
+          },
+        });
+
+        currentY =
+          getTableEndY(
+            currentY + 36,
+          ) + 12;
+      }
+
+      if (
+        analysis.detections.length > 0
+      ) {
+        currentY =
+          ensurePageSpace(
+            currentY,
+            55,
+          );
+
+        addSectionTitle(
+          "Detection Findings",
+          currentY,
+        );
+
+        autoTable(document, {
+          startY: currentY + 6,
+
+          margin: {
+            left: margin,
+            right: margin,
+          },
+
+          head: [
+            [
+              "Detection",
+              "Severity",
+              "MITRE",
+              "Confidence",
+              "Events",
+              "Source IP",
+            ],
+          ],
+
+          body:
+            analysis.detections.map(
+              (detection) => [
+                detection.type,
+                detection.severity,
+                detection.mitre_id,
+                `${detection.confidence}%`,
+                detection.event_count.toLocaleString(),
+                detection.source_ip ??
+                  "Unavailable",
+              ],
+            ),
+
+          theme: "grid",
+
+          headStyles: {
+            fillColor: [
+              109,
+              40,
+              217,
+            ],
+            textColor: 255,
+            fontStyle: "bold",
+          },
+
+          alternateRowStyles: {
+            fillColor: [
+              250,
+              245,
+              255,
+            ],
+          },
+
+          styles: {
+            fontSize: 8,
+            cellPadding: 2.5,
+            overflow: "linebreak",
+            textColor: [
+              51,
+              65,
+              85,
+            ],
+          },
+
+          columnStyles: {
+            0: {
+              cellWidth: 42,
+            },
+
+            1: {
+              cellWidth: 22,
+            },
+
+            2: {
+              cellWidth: 24,
+            },
+
+            3: {
+              cellWidth: 25,
+            },
+
+            4: {
+              cellWidth: 18,
+            },
+
+            5: {
+              cellWidth: 42,
+            },
+          },
+        });
+
+        currentY =
+          getTableEndY(
+            currentY + 40,
+          ) + 12;
+      }
+
+      if (
+        affectedUsers.length > 0
+      ) {
+        currentY =
+          ensurePageSpace(
+            currentY,
+            30,
+          );
+
+        addSectionTitle(
+          "Affected Accounts",
+          currentY,
+        );
+
+        currentY += 9;
+
+        document.setFont(
+          "helvetica",
+          "normal",
+        );
+
+        document.setFontSize(10);
+
+        document.setTextColor(
+          51,
+          65,
+          85,
+        );
+
+        const affectedAccountLines =
+          document.splitTextToSize(
+            affectedUsers.join(", "),
+            contentWidth,
+          ) as string[];
+
+        document.text(
+          affectedAccountLines,
+          margin,
+          currentY,
+          {
+            lineHeightFactor: 1.4,
+          },
+        );
+
+        currentY +=
+          affectedAccountLines.length *
+            5.5 +
+          10;
+      }
+
+      if (
+        investigations.length > 0
+      ) {
+        currentY =
+          ensurePageSpace(
+            currentY,
+            50,
+          );
+
+        addSectionTitle(
+          "Investigation Performance",
+          currentY,
+        );
+
+        const openCases =
+          investigations.filter(
+            (investigation) =>
+              investigation.status ===
+              "Open",
+          ).length;
+
+        const activeCases =
+          investigations.filter(
+            (investigation) =>
+              investigation.status ===
+              "In Progress",
+          ).length;
+
+        const resolvedCases =
+          investigations.filter(
+            (investigation) =>
+              investigation.status ===
+              "Resolved",
+          ).length;
+
+        const falsePositiveCases =
+          investigations.filter(
+            (investigation) =>
+              investigation.status ===
+              "False Positive",
+          ).length;
+
+        const completedActions =
+          investigations.reduce(
+            (
+              total,
+              investigation,
+            ) =>
+              total +
+              investigation
+                .completed_actions
+                .length,
+            0,
+          );
+
+        autoTable(document, {
+          startY: currentY + 6,
+
+          margin: {
+            left: margin,
+            right: margin,
+          },
+
+          head: [
+            [
+              "Metric",
+              "Value",
+              "Metric",
+              "Value",
+            ],
+          ],
+
+          body: [
+            [
+              "Open Cases",
+              openCases.toLocaleString(),
+              "Active Cases",
+              activeCases.toLocaleString(),
+            ],
+
+            [
+              "Resolved Cases",
+              resolvedCases.toLocaleString(),
+              "False Positives",
+              falsePositiveCases.toLocaleString(),
+            ],
+
+            [
+              "Completed Actions",
+              completedActions.toLocaleString(),
+              "Assigned Analysts",
+              getUniqueAnalysts(
+                investigations,
+              ).length.toLocaleString(),
+            ],
+          ],
+
+          theme: "grid",
+
+          headStyles: {
+            fillColor: [
+              8,
+              145,
+              178,
+            ],
+            textColor: 255,
+            fontStyle: "bold",
+          },
+
+          alternateRowStyles: {
+            fillColor: [
+              236,
+              254,
+              255,
+            ],
+          },
+
+          styles: {
+            fontSize: 9,
+            cellPadding: 3,
+            textColor: [
+              51,
+              65,
+              85,
+            ],
+          },
+        });
+
+        currentY =
+          getTableEndY(
+            currentY + 35,
+          ) + 12;
+
+        currentY =
+          ensurePageSpace(
+            currentY,
+            55,
+          );
+
+        addSectionTitle(
+          "Investigation Cases",
+          currentY,
+        );
+
+        autoTable(document, {
+          startY: currentY + 6,
+
+          margin: {
+            left: margin,
+            right: margin,
+          },
+
+          head: [
+            [
+              "Case",
+              "Status",
+              "Analyst",
+              "Actions",
+              "Last Updated",
+            ],
+          ],
+
+          body:
+            investigations.map(
+              (investigation) => [
+                `#${investigation.id}`,
+                investigation.status,
+                investigation.analyst ||
+                  "Unassigned",
+                investigation.completed_actions.length.toLocaleString(),
+                formatReportDate(
+                  investigation.updated_at,
+                ),
+              ],
+            ),
+
+          theme: "striped",
+
+          headStyles: {
+            fillColor: [
+              30,
+              41,
+              59,
+            ],
+            textColor: 255,
+            fontStyle: "bold",
+          },
+
+          styles: {
+            fontSize: 8,
+            cellPadding: 2.5,
+            overflow: "linebreak",
+            textColor: [
+              51,
+              65,
+              85,
+            ],
+          },
+
+          columnStyles: {
+            0: {
+              cellWidth: 18,
+            },
+
+            1: {
+              cellWidth: 30,
+            },
+
+            2: {
+              cellWidth: 36,
+            },
+
+            3: {
+              cellWidth: 22,
+            },
+
+            4: {
+              cellWidth: 70,
+            },
+          },
+        });
+
+        currentY =
+          getTableEndY(
+            currentY + 40,
+          ) + 12;
+      }
+
+      if (
+        analysis.timeline.length > 0
+      ) {
+        currentY =
+          ensurePageSpace(
+            currentY,
+            60,
+          );
+
+        addSectionTitle(
+          "Recent Security Activity",
+          currentY,
+        );
+
+        autoTable(document, {
+          startY: currentY + 6,
+
+          margin: {
+            left: margin,
+            right: margin,
+          },
+
+          head: [
+            [
+              "Timestamp",
+              "Event",
+              "Status",
+              "IP",
+              "User",
+            ],
+          ],
+
+          body:
+            analysis.timeline
+              .slice(0, 30)
+              .map((event) => [
+                event.timestamp,
+                event.title,
+                event.status,
+                event.ip ?? "—",
+                event.user ?? "—",
+              ]),
+
+          theme: "striped",
+
+          headStyles: {
+            fillColor: [
+              2,
+              132,
+              199,
+            ],
+            textColor: 255,
+            fontStyle: "bold",
+          },
+
+          styles: {
+            fontSize: 7.5,
+            cellPadding: 2.2,
+            overflow: "linebreak",
+            textColor: [
+              51,
+              65,
+              85,
+            ],
+          },
+
+          columnStyles: {
+            0: {
+              cellWidth: 35,
+            },
+
+            1: {
+              cellWidth: 63,
+            },
+
+            2: {
+              cellWidth: 25,
+            },
+
+            3: {
+              cellWidth: 35,
+            },
+
+            4: {
+              cellWidth: 25,
+            },
+          },
+        });
+
+        currentY =
+          getTableEndY(
+            currentY + 45,
+          ) + 12;
+      }
+
+      const recommendations =
+        getRecommendations(
+          analysis,
+        );
+
+      currentY =
+        ensurePageSpace(
+          currentY,
+          48,
+        );
+
+      addSectionTitle(
+        "Recommended Response Actions",
+        currentY,
+      );
+
+      currentY += 9;
+
+      document.setFont(
+        "helvetica",
+        "normal",
+      );
+
+      document.setFontSize(10);
+
+      document.setTextColor(
+        51,
+        65,
+        85,
+      );
+
+      recommendations.forEach(
+        (
+          recommendation,
+          index,
+        ) => {
+          currentY =
+            ensurePageSpace(
+              currentY,
+              14,
+            );
+
+          const recommendationLines =
+            document.splitTextToSize(
+              `${index + 1}. ${recommendation}`,
+              contentWidth,
+            ) as string[];
+
+          document.text(
+            recommendationLines,
+            margin,
+            currentY,
+            {
+              lineHeightFactor: 1.4,
+            },
+          );
+
+          currentY +=
+            recommendationLines.length *
+              5.5 +
+            3;
+        },
+      );
+
+      const pageCount =
+        document.getNumberOfPages();
+
+      for (
+        let pageNumber = 1;
+        pageNumber <= pageCount;
+        pageNumber += 1
+      ) {
+        document.setPage(
+          pageNumber,
+        );
+
+        document.setDrawColor(
+          226,
+          232,
+          240,
+        );
+
+        document.line(
+          margin,
+          pageHeight - 14,
+          pageWidth - margin,
+          pageHeight - 14,
+        );
+
+        document.setFont(
+          "helvetica",
+          "normal",
+        );
+
+        document.setFontSize(8);
+
+        document.setTextColor(
+          100,
+          116,
+          139,
+        );
+
+        document.text(
+          "SentinelAI Executive SOC Report",
+          margin,
+          pageHeight - 8,
+        );
+
+        document.text(
+          `Page ${pageNumber} of ${pageCount}`,
+          pageWidth - margin,
+          pageHeight - 8,
+          {
+            align: "right",
+          },
+        );
+      }
+
+      const safeFilename =
+        normalizeReportFilename(
+          analysis.filename,
+        );
+
+      document.save(
+        `SentinelAI_${safeFilename}_Executive_Report.pdf`,
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "SentinelAI could not generate the executive PDF report.",
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  if (isLoading) {
+    return <LoadingReport />;
   }
 
   if (!analysis) {
-    return <EmptyReport />;
+    return <EmptyReports />;
   }
-
-  if (!selectedDetection) {
-    return <NoDetectionsReport />;
-  }
-
-  const investigationStatus =
-    investigation?.status ?? "Open";
-
-  const analystNotes =
-    investigation?.notes.trim() ||
-    "No analyst notes have been recorded for this investigation.";
-
-  const completedActions =
-    investigation?.completedActions ?? [];
 
   return (
-    <div className="min-h-screen bg-slate-900 p-8 text-white">
-      <div className="mx-auto max-w-6xl">
-        <header className="print-hidden flex flex-wrap items-start justify-between gap-5">
-          <div>
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <Link
-                to="/"
-                className="transition hover:text-blue-400"
-              >
-                Dashboard
-              </Link>
-
-              <ChevronRight className="h-4 w-4" />
-
-              <span>Reports</span>
+    <div className="min-h-screen bg-slate-900 p-4 text-white sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl">
+        <header className="flex flex-wrap items-start justify-between gap-5">
+          <div className="flex items-start gap-4">
+            <div className="rounded-xl bg-blue-500/15 p-3">
+              <FileText className="h-8 w-8 text-blue-400" />
             </div>
 
-            <h1 className="mt-3 text-4xl font-bold">
-              Incident Report
-            </h1>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">
+                SentinelAI Reporting
+              </p>
 
-            <p className="mt-2 text-slate-400">
-              Review, print, or download the generated SentinelAI
-              incident report.
-            </p>
+              <h1 className="mt-2 text-3xl font-bold sm:text-4xl">
+                Executive SOC Reports
+              </h1>
+
+              <p className="mt-2 max-w-3xl text-slate-400">
+                Leadership-level security metrics,
+                investigation performance, MITRE ATT&CK
+                coverage, threat-source analysis, and
+                executive PDF reporting.
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              to="/investigations"
-              className="flex items-center gap-2 rounded-lg border border-slate-600 px-5 py-3 font-medium text-slate-200 transition hover:border-blue-500 hover:text-blue-400"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              Investigation
-            </Link>
-
             <button
               type="button"
-              onClick={downloadTextReport}
-              className="flex items-center gap-2 rounded-lg border border-blue-500 px-5 py-3 font-medium text-blue-400 transition hover:bg-blue-500/10"
+              onClick={() =>
+                void loadReportData()
+              }
+              disabled={isLoading}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-600 px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-blue-500 hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Download className="h-5 w-5" />
-              Download Report
+              <RefreshCcw className="h-4 w-4" />
+              Refresh
             </button>
 
             <button
               type="button"
-              onClick={printReport}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-medium transition hover:bg-blue-700"
+              onClick={() =>
+                void generatePdfReport()
+              }
+              disabled={isGenerating}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-medium transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Printer className="h-5 w-5" />
-              Print / Save PDF
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="h-5 w-5" />
+                  Download Executive PDF
+                </>
+              )}
             </button>
           </div>
         </header>
 
-        <main
-          id="incident-report"
-          className="mt-8 rounded-xl border border-slate-700 bg-slate-800 shadow-xl print:mt-0 print:border-0 print:bg-white print:text-black print:shadow-none"
-        >
-          <section className="border-b border-slate-700 bg-gradient-to-r from-blue-950/70 to-slate-800 p-8 print:border-slate-300 print:bg-white">
-            <div className="flex flex-wrap items-start justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="rounded-xl bg-blue-500/15 p-4 print:border print:border-slate-300 print:bg-white">
-                  <ShieldAlert className="h-10 w-10 text-blue-400 print:text-black" />
-                </div>
+        {errorMessage && (
+          <section className="mt-6 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
 
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-400 print:text-slate-600">
-                    SentinelAI
-                  </p>
-
-                  <h2 className="mt-1 text-3xl font-bold">
-                    Security Incident Report
-                  </h2>
-
-                  <p className="mt-2 text-slate-400 print:text-slate-600">
-                    Automated detection and analyst investigation
-                    summary
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-left sm:text-right">
-                <p className="text-sm text-slate-400 print:text-slate-600">
-                  Report ID
-                </p>
-
-                <p className="mt-1 font-mono font-semibold">
-                  {reportId}
-                </p>
-
-                <p className="mt-3 text-sm text-slate-400 print:text-slate-600">
-                  Generated
-                </p>
-
-                <p className="mt-1 text-sm">
-                  {generatedDate}
-                </p>
-              </div>
-            </div>
+            <p className="text-sm leading-6">
+              {errorMessage}
+            </p>
           </section>
-
-          <div className="space-y-8 p-8">
-            <section>
-              <SectionHeading
-                icon={ShieldAlert}
-                title="Executive Summary"
-                description="High-level overview of the detected security incident."
-              />
-
-              <div className="mt-5 rounded-xl border border-slate-700 bg-slate-950/50 p-6 print:border-slate-300 print:bg-white">
-                <div className="flex flex-wrap items-start justify-between gap-5">
-                  <div>
-                    <p className="text-sm text-slate-400 print:text-slate-600">
-                      Incident title
-                    </p>
-
-                    <h3 className="mt-1 text-2xl font-bold">
-                      {selectedDetection.type}
-                    </h3>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3">
-                    <span
-                      className={`rounded-full border px-4 py-2 text-sm font-bold ${
-                        severityStyles[
-                          selectedDetection.severity
-                        ]
-                      }`}
-                    >
-                      {selectedDetection.severity}
-                    </span>
-
-                    <span
-                      className={`rounded-full border px-4 py-2 text-sm font-bold ${
-                        statusStyles[investigationStatus]
-                      }`}
-                    >
-                      {investigationStatus}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="mt-5 leading-7 text-slate-300 print:text-slate-700">
-                  {selectedDetection.description}
-                </p>
-              </div>
-            </section>
-
-            <section>
-              <SectionHeading
-                icon={FileSearch}
-                title="Incident Details"
-                description="Technical indicators and risk information associated with the incident."
-              />
-
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <ReportMetric
-                  label="Overall Risk"
-                  value={`${analysis.risk_score}/100`}
-                  valueClass="text-orange-300 print:text-black"
-                />
-
-                <ReportMetric
-                  label="Risk Level"
-                  value={analysis.risk_level}
-                  valueClass="text-orange-300 print:text-black"
-                />
-
-                <ReportMetric
-                  label="Confidence"
-                  value={`${selectedDetection.confidence}%`}
-                  valueClass="text-green-400 print:text-black"
-                />
-
-                <ReportMetric
-                  label="Related Events"
-                  value={String(
-                    selectedDetection.event_count,
-                  )}
-                />
-              </div>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <ReportMetric
-                  icon={Network}
-                  label="Source IP"
-                  value={
-                    selectedDetection.source_ip ??
-                    "Not available"
-                  }
-                  valueClass="font-mono text-red-300 print:text-black"
-                />
-
-                <ReportMetric
-                  icon={Target}
-                  label="MITRE ATT&CK"
-                  value={selectedDetection.mitre_id}
-                  valueClass="text-blue-400 print:text-black"
-                />
-
-                <ReportMetric
-                  icon={FileText}
-                  label="Source File"
-                  value={analysis.filename}
-                />
-              </div>
-            </section>
-
-            <section>
-              <SectionHeading
-                icon={UserRound}
-                title="Affected Accounts"
-                description="User accounts associated with the detected behavior."
-              />
-
-              <div className="mt-5 flex flex-wrap gap-3">
-                {selectedDetection.affected_users.length >
-                0 ? (
-                  selectedDetection.affected_users.map(
-                    (user) => (
-                      <span
-                        key={user}
-                        className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-4 py-2 font-medium text-purple-300 print:border-slate-300 print:bg-white print:text-black"
-                      >
-                        {user}
-                      </span>
-                    ),
-                  )
-                ) : (
-                  <p className="text-sm text-slate-400 print:text-slate-600">
-                    No affected accounts were identified.
-                  </p>
-                )}
-              </div>
-            </section>
-
-            <section>
-              <SectionHeading
-                icon={AlertTriangle}
-                title="Response Actions"
-                description="Recommended containment and investigation actions."
-              />
-
-              <div className="mt-5 space-y-3">
-                {selectedDetection.recommendations.map(
-                  (recommendation, index) => {
-                    const completed =
-                      completedActions.includes(
-                        recommendation,
-                      );
-
-                    return (
-                      <div
-                        key={recommendation}
-                        className={`flex items-start gap-4 rounded-lg border p-4 ${
-                          completed
-                            ? "border-green-500/30 bg-green-500/10"
-                            : "border-slate-700 bg-slate-950/40"
-                        } print:border-slate-300 print:bg-white`}
-                      >
-                        <div
-                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                            completed
-                              ? "bg-green-500/20 text-green-400"
-                              : "bg-slate-700 text-slate-300"
-                          } print:border print:border-slate-400 print:bg-white print:text-black`}
-                        >
-                          {completed ? (
-                            <CheckCircle2 className="h-4 w-4" />
-                          ) : (
-                            <span className="text-xs font-bold">
-                              {index + 1}
-                            </span>
-                          )}
-                        </div>
-
-                        <div>
-                          <p
-                            className={
-                              completed
-                                ? "text-green-300 print:text-black"
-                                : "text-slate-200 print:text-black"
-                            }
-                          >
-                            {recommendation}
-                          </p>
-
-                          <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-                            {completed
-                              ? "Completed"
-                              : "Pending"}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  },
-                )}
-              </div>
-            </section>
-
-            <section>
-              <SectionHeading
-                icon={FileText}
-                title="Analyst Notes"
-                description="Documented analyst findings and investigation decisions."
-              />
-
-              <div className="mt-5 min-h-32 whitespace-pre-wrap rounded-xl border border-slate-700 bg-slate-950/50 p-5 leading-7 text-slate-300 print:border-slate-300 print:bg-white print:text-black">
-                {analystNotes}
-              </div>
-            </section>
-
-            <section>
-              <SectionHeading
-                icon={Clock3}
-                title="Evidence Timeline"
-                description="Authentication and detection events related to this incident."
-              />
-
-              <div className="relative mt-6">
-                <div className="absolute bottom-0 left-5 top-0 w-px bg-slate-700 print:bg-slate-300" />
-
-                <div className="space-y-5">
-                  {relatedTimeline.length > 0 ? (
-                    relatedTimeline.map(
-                      (event, index) => (
-                        <ReportTimelineEvent
-                          key={`${event.line_number}-${index}`}
-                          event={event}
-                        />
-                      ),
-                    )
-                  ) : (
-                    <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-5 text-slate-400 print:border-slate-300 print:bg-white print:text-slate-600">
-                      No directly related evidence events were
-                      found.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <section>
-              <SectionHeading
-                icon={FileSearch}
-                title="Log Analysis Summary"
-                description="Summary of the complete uploaded security log."
-              />
-
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <ReportMetric
-                  label="Log Entries"
-                  value={String(analysis.entries)}
-                />
-
-                <ReportMetric
-                  label="Failed Logins"
-                  value={String(
-                    analysis.failed_logins,
-                  )}
-                  valueClass="text-orange-300 print:text-black"
-                />
-
-                <ReportMetric
-                  label="Successful Logins"
-                  value={String(
-                    analysis.successful_logins,
-                  )}
-                  valueClass="text-green-400 print:text-black"
-                />
-
-                <ReportMetric
-                  label="Total Detections"
-                  value={String(
-                    analysis.detections.length,
-                  )}
-                  valueClass="text-red-300 print:text-black"
-                />
-              </div>
-            </section>
-
-            <footer className="border-t border-slate-700 pt-6 text-center text-sm text-slate-500 print:border-slate-300">
-              Generated by SentinelAI · AI-Powered Security
-              Operations Platform
-            </footer>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-type SectionHeadingProps = {
-  icon: typeof ShieldAlert;
-  title: string;
-  description: string;
-};
-
-function SectionHeading({
-  icon: Icon,
-  title,
-  description,
-}: SectionHeadingProps) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="rounded-lg bg-blue-500/15 p-3 print:border print:border-slate-300 print:bg-white">
-        <Icon className="h-6 w-6 text-blue-400 print:text-black" />
-      </div>
-
-      <div>
-        <h3 className="text-xl font-bold">
-          {title}
-        </h3>
-
-        <p className="mt-1 text-sm text-slate-400 print:text-slate-600">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-type ReportMetricProps = {
-  icon?: typeof Network;
-  label: string;
-  value: string;
-  valueClass?: string;
-};
-
-function ReportMetric({
-  icon: Icon,
-  label,
-  value,
-  valueClass = "text-white print:text-black",
-}: ReportMetricProps) {
-  return (
-    <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-4 print:border-slate-300 print:bg-white">
-      <div className="flex items-center gap-2">
-        {Icon && (
-          <Icon className="h-4 w-4 text-slate-400 print:text-slate-600" />
         )}
 
-        <p className="text-sm text-slate-400 print:text-slate-600">
-          {label}
-        </p>
-      </div>
+        <div className="mt-8 space-y-8">
+          <ExecutiveOverview
+            analysis={analysis}
+            investigations={investigations}
+          />
 
-      <p
-        className={`mt-2 break-words font-semibold ${valueClass}`}
-      >
-        {value}
-      </p>
+          <ThreatTrendChart
+            analysis={analysis}
+            investigations={investigations}
+          />
+
+          <div className="grid gap-8 xl:grid-cols-2">
+            <MitreCoverage
+              analysis={analysis}
+            />
+
+            <TopThreatActors
+              analysis={analysis}
+            />
+          </div>
+
+          <AnalystPerformance
+            investigations={investigations}
+          />
+
+          <ExecutiveExport
+            onExport={() =>
+              void generatePdfReport()
+            }
+            totalCases={
+              investigations.length
+            }
+            totalDetections={
+              analysis.detections.length
+            }
+            totalThreats={
+              analysis.suspicious_ips.length
+            }
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+function LoadingReport() {
+  return (
+    <div className="min-h-screen bg-slate-900 p-8 text-white">
+      <div className="flex min-h-[500px] items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-400" />
+
+          <h1 className="mt-5 text-xl font-bold">
+            Loading executive report data
+          </h1>
+
+          <p className="mt-2 text-slate-400">
+            SentinelAI is preparing security metrics,
+            investigations, and threat intelligence.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
 
-type ReportTimelineEventProps = {
-  event: TimelineEvent;
-};
-
-function ReportTimelineEvent({
-  event,
-}: ReportTimelineEventProps) {
-  const isFailed =
-    event.event_type === "failed_login";
-  const isSuccessful =
-    event.event_type === "successful_login";
-  const isDetection =
-    event.event_type === "detection";
-
-  const circleStyle = isFailed
-    ? "border-red-500/40 bg-red-500/20 text-red-400"
-    : isSuccessful
-      ? "border-green-500/40 bg-green-500/20 text-green-400"
-      : isDetection
-        ? "border-amber-500/40 bg-amber-500/20 text-amber-400"
-        : "border-blue-500/40 bg-blue-500/20 text-blue-400";
-
-  return (
-    <article className="relative flex gap-5">
-      <div
-        className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${circleStyle} print:border-slate-400 print:bg-white print:text-black`}
-      >
-        <Clock3 className="h-5 w-5" />
-      </div>
-
-      <div className="flex-1 rounded-lg border border-slate-700 bg-slate-950/50 p-5 print:border-slate-300 print:bg-white">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">
-              {event.timestamp}
-            </p>
-
-            <h4 className="mt-1 font-semibold">
-              {event.title}
-            </h4>
-          </div>
-
-          <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300 print:border print:border-slate-300 print:bg-white print:text-black">
-            {event.status}
-          </span>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          {event.ip && (
-            <span>
-              <span className="text-slate-500">
-                IP:{" "}
-              </span>
-
-              <span className="font-mono text-red-300 print:text-black">
-                {event.ip}
-              </span>
-            </span>
-          )}
-
-          {event.user && (
-            <span>
-              <span className="text-slate-500">
-                User:{" "}
-              </span>
-
-              <span className="text-slate-200 print:text-black">
-                {event.user}
-              </span>
-            </span>
-          )}
-
-          {event.method && (
-            <span>
-              <span className="text-slate-500">
-                Method:{" "}
-              </span>
-
-              <span className="text-slate-200 print:text-black">
-                {event.method}
-              </span>
-            </span>
-          )}
-        </div>
-
-        <details className="mt-4 print:block">
-          <summary className="cursor-pointer text-sm text-blue-400 print:hidden">
-            View raw log evidence
-          </summary>
-
-          <div className="mt-3 hidden print:block">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Raw evidence
-            </p>
-          </div>
-
-          <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-4 text-xs text-slate-400 print:overflow-visible print:border print:border-slate-300 print:bg-white print:text-black">
-            {event.raw}
-          </pre>
-        </details>
-      </div>
-    </article>
-  );
-}
-
-function EmptyReport() {
+function EmptyReports() {
   return (
     <div className="min-h-screen bg-slate-900 p-8 text-white">
       <div className="mx-auto max-w-4xl">
         <h1 className="text-4xl font-bold">
-          Reports
+          Executive SOC Reports
         </h1>
 
         <section className="mt-10 rounded-xl border border-dashed border-slate-600 bg-slate-800 p-12 text-center">
           <FileText className="mx-auto h-14 w-14 text-blue-400" />
 
           <h2 className="mt-5 text-2xl font-bold">
-            No report data available
+            No active analysis
           </h2>
 
           <p className="mx-auto mt-3 max-w-xl text-slate-400">
-            Analyze a security log and begin an investigation before
-            generating an incident report.
+            Upload a security log or open an analysis from
+            History before viewing executive reports.
           </p>
-
-          <Link
-            to="/upload"
-            className="mt-7 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-medium transition hover:bg-blue-700"
-          >
-            Upload Security Logs
-            <ChevronRight className="h-4 w-4" />
-          </Link>
         </section>
       </div>
     </div>
   );
 }
 
-function NoDetectionsReport() {
-  return (
-    <div className="min-h-screen bg-slate-900 p-8 text-white">
-      <div className="mx-auto max-w-4xl">
-        <h1 className="text-4xl font-bold">
-          Reports
-        </h1>
+function buildExecutiveSummary(
+  analysis: UploadResult,
+  highestRiskIp?: string,
+) {
+  const primaryDetection =
+    [...analysis.detections].sort(
+      (
+        firstDetection,
+        secondDetection,
+      ) =>
+        getSeverityScore(
+          secondDetection.severity,
+        ) -
+        getSeverityScore(
+          firstDetection.severity,
+        ),
+    )[0];
 
-        <section className="mt-10 rounded-xl border border-green-500/30 bg-green-500/10 p-12 text-center">
-          <CheckCircle2 className="mx-auto h-14 w-14 text-green-400" />
+  const sourceText =
+    highestRiskIp
+      ? `The most notable suspicious source was ${highestRiskIp}.`
+      : "No suspicious source IP exceeded the configured threshold.";
 
-          <h2 className="mt-5 text-2xl font-bold">
-            No incident report required
-          </h2>
+  const detectionText =
+    primaryDetection
+      ? `The primary finding was ${primaryDetection.type}, mapped to MITRE ATT&CK ${primaryDetection.mitre_id} with ${primaryDetection.confidence}% confidence.`
+      : "No primary MITRE ATT&CK detection was generated.";
 
-          <p className="mx-auto mt-3 max-w-xl text-green-300">
-            The latest log analysis did not produce any security
-            detections.
-          </p>
+  return `SentinelAI analyzed ${analysis.entries.toLocaleString()} security events from ${analysis.filename}. The analysis identified ${analysis.failed_logins.toLocaleString()} failed login attempts and ${analysis.successful_logins.toLocaleString()} successful login attempts. ${sourceText} ${detectionText} The resulting incident assessment is ${analysis.risk_level.toLowerCase()} risk with a score of ${analysis.risk_score}/100.`;
+}
 
-          <Link
-            to="/"
-            className="mt-7 inline-flex items-center gap-2 rounded-lg bg-green-600 px-5 py-3 font-medium transition hover:bg-green-700"
-          >
-            Return to Dashboard
-            <ChevronRight className="h-4 w-4" />
-          </Link>
-        </section>
-      </div>
-    </div>
+function getRecommendations(
+  analysis: UploadResult,
+) {
+  const detectionRecommendations =
+    analysis.detections.flatMap(
+      (detection) =>
+        detection.recommendations ??
+        [],
+    );
+
+  const recommendations =
+    Array.from(
+      new Set(
+        detectionRecommendations.filter(
+          (recommendation) =>
+            recommendation.trim()
+              .length > 0,
+        ),
+      ),
+    );
+
+  if (recommendations.length > 0) {
+    return recommendations;
+  }
+
+  return [
+    "Review all suspicious source IP addresses and correlate their activity with the authentication timeline.",
+    "Validate whether successful logins were authorized.",
+    "Review targeted privileged accounts and reset credentials when compromise is suspected.",
+    "Enable multifactor authentication and rate limiting for exposed authentication services.",
+    "Preserve related logs and document analyst findings before containment.",
+  ];
+}
+
+function getSeverityScore(
+  severity:
+    UploadResult["detections"][number]["severity"],
+) {
+  const scores: Record<
+    UploadResult["detections"][number]["severity"],
+    number
+  > = {
+    Critical: 4,
+    High: 3,
+    Medium: 2,
+    Low: 1,
+  };
+
+  return scores[severity];
+}
+
+function getRiskColor(
+  riskLevel: UploadResult["risk_level"],
+): [number, number, number] {
+  switch (riskLevel) {
+    case "Critical":
+      return [220, 38, 38];
+
+    case "High":
+      return [234, 88, 12];
+
+    case "Medium":
+      return [217, 119, 6];
+
+    case "Low":
+    default:
+      return [22, 163, 74];
+  }
+}
+
+function getIpPriority(
+  attempts: number,
+) {
+  if (attempts >= 20) {
+    return "Critical";
+  }
+
+  if (attempts >= 10) {
+    return "High";
+  }
+
+  if (attempts >= 4) {
+    return "Medium";
+  }
+
+  return "Low";
+}
+
+function getUniqueAnalysts(
+  investigations: Investigation[],
+) {
+  return Array.from(
+    new Set(
+      investigations.map(
+        (investigation) =>
+          investigation.analyst.trim() ||
+          "Unassigned",
+      ),
+    ),
   );
+}
+
+function formatReportDate(
+  value: string | null,
+) {
+  if (!value) {
+    return "Unavailable";
+  }
+
+  const date = new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return value;
+  }
+
+  return date.toLocaleString();
+}
+
+function normalizeReportFilename(
+  filename: string,
+) {
+  const cleanedFilename =
+    filename
+      .trim()
+      .replace(
+        /(\.(?:log|txt|csv|json))\1$/i,
+        "$1",
+      );
+
+  const withoutExtension =
+    cleanedFilename.replace(
+      /\.[^/.]+$/,
+      "",
+    );
+
+  const safeFilename =
+    withoutExtension.replace(
+      /[^a-zA-Z0-9-_]/g,
+      "_",
+    );
+
+  return safeFilename || "Security_Analysis";
 }
 
 export default Reports;

@@ -4,10 +4,12 @@ import {
 } from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
+
 import CaseQueue from "./pages/CaseQueue";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import Investigations from "./pages/Investigations";
+import InvestigationWorkspace from "./pages/InvestigationWorkspace";
 import MitreExplorer from "./pages/MitreExplorer";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
@@ -18,6 +20,7 @@ function App() {
   return (
     <MainLayout>
       <Routes>
+
         <Route
           path="/"
           element={<Dashboard />}
@@ -31,6 +34,13 @@ function App() {
         <Route
           path="/investigations"
           element={<Investigations />}
+        />
+
+        <Route
+          path="/investigations/:id"
+          element={
+            <InvestigationWorkspace />
+          }
         />
 
         <Route
@@ -57,6 +67,7 @@ function App() {
           path="/settings"
           element={<Settings />}
         />
+
       </Routes>
     </MainLayout>
   );
