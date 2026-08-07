@@ -45,6 +45,16 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
+# ✅ THIS WAS MISSING
+# FastAPI database session dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -52,16 +62,9 @@ def utc_now() -> datetime:
 class Analysis(Base):
     __tablename__ = "analyses"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-        index=True,
-    )
+    id = Column(Integer, primary_key=True, index=True)
 
-    filename = Column(
-        String,
-        nullable=False,
-    )
+    filename = Column(String, nullable=False)
 
     upload_time = Column(
         DateTime(timezone=True),
@@ -122,26 +125,16 @@ class Analysis(Base):
 class Detection(Base):
     __tablename__ = "detections"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-        index=True,
-    )
+    id = Column(Integer, primary_key=True, index=True)
 
     analysis_id = Column(
         Integer,
-        ForeignKey(
-            "analyses.id",
-            ondelete="CASCADE",
-        ),
+        ForeignKey("analyses.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
-    type = Column(
-        String,
-        nullable=False,
-    )
+    type = Column(String, nullable=False)
 
     severity = Column(
         String,
@@ -199,18 +192,11 @@ class Detection(Base):
 class TimelineEvent(Base):
     __tablename__ = "timeline_events"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-        index=True,
-    )
+    id = Column(Integer, primary_key=True, index=True)
 
     analysis_id = Column(
         Integer,
-        ForeignKey(
-            "analyses.id",
-            ondelete="CASCADE",
-        ),
+        ForeignKey("analyses.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -281,28 +267,18 @@ class TimelineEvent(Base):
 class Investigation(Base):
     __tablename__ = "investigations"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-        index=True,
-    )
+    id = Column(Integer, primary_key=True, index=True)
 
     analysis_id = Column(
         Integer,
-        ForeignKey(
-            "analyses.id",
-            ondelete="CASCADE",
-        ),
+        ForeignKey("analyses.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
     detection_id = Column(
         Integer,
-        ForeignKey(
-            "detections.id",
-            ondelete="SET NULL",
-        ),
+        ForeignKey("detections.id", ondelete="SET NULL"),
         nullable=True,
     )
 
@@ -350,5 +326,5 @@ class Investigation(Base):
 
 
 def create_database() -> None:
-    Base.metadata.create_all(bind=engine) 
+    Base.metadata.create_all(bind=engine)
     
