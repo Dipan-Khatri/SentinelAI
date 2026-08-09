@@ -192,7 +192,7 @@ useState(false);
 
 
 
-const [loading,setLoading] =
+const [, setLoading] = useState(false);
 
 useState(false);
 
@@ -846,21 +846,11 @@ String(index)
 
 
 const severity =
-
-selectedDetection?.severity ?? "Low";
-
-
-
-
-const currentStatus =
-
-status;
-
+  selectedDetection?.severity ?? "Low";
 
 
 const recommendations =
-
-selectedDetection?.recommendations ?? [];
+  selectedDetection?.recommendations ?? [];
 
 // =====================================
 // JSX UI

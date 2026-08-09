@@ -236,13 +236,13 @@ function MitreExplorer() {
           detections[0].severity,
         );
 
-        const averageConfidence = Math.round(
-          detections.reduce(
-            (total, detection) =>
-              total + detection.confidence,
-            0,
-          ) / detections.length,
-        );
+      const averageConfidence = Math.round(
+  detections.reduce(
+    (total, detection) =>
+      total + (detection.confidence ?? 0),
+    0,
+  ) / detections.length,
+);
 
         const totalEvents = detections.reduce(
           (total, detection) =>
