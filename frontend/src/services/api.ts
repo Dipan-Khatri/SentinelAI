@@ -1,9 +1,16 @@
+// frontend/src/services/api.ts
+
+
 const API_URL =
-  import.meta.env.VITE_API_URL?.trim() ||
+  import.meta.env.VITE_API_URL ||
   "https://sentinelai-api-gbci.onrender.com";
 
-const SETTINGS_STORAGE_KEY =
-  "sentinelai_detection_settings";
+
+
+// ================================
+// BASIC TYPES
+// ================================
+
 
 export type RiskLevel =
   | "Critical"
@@ -11,121 +18,244 @@ export type RiskLevel =
   | "Medium"
   | "Low";
 
-export type SuspiciousIp = {
+
+
+export interface SuspiciousIp {
+
   ip: string;
+
   attempts: number;
+
   targeted_users: string[];
-};
 
-export type Detection = {
+}
+
+
+
+export interface Detection {
+
   id?: number;
+
   type: string;
+
   severity: RiskLevel;
+
   mitre_id: string;
+
   description: string;
-  confidence: number;
-  source_ip: string | null;
+
+  confidence?: number;
+
+  source_ip?: string | null;
+
   affected_users: string[];
+
   event_count: number;
+
   recommendations: string[];
-};
 
-export type SeveritySummary = {
+}
+
+
+
+
+export interface SeveritySummary {
+
   critical: number;
-  high: number;
-  medium: number;
-  low: number;
-};
 
-export type TimelineEvent = {
+  high: number;
+
+  medium: number;
+
+  low: number;
+
+}
+
+
+
+
+export interface TimelineEvent {
+
   id?: number;
-  line_number: number;
+
   timestamp: string;
-  event_type:
-    | "failed_login"
-    | "successful_login"
-    | "detection"
-    | "other";
-  status: string;
-  title: string;
-  ip: string | null;
-  user: string | null;
-  method: string | null;
-  raw: string;
-  invalid_user: boolean;
-};
 
-export type RiskWeights = {
-  critical: number;
-  high: number;
-  medium: number;
-  low: number;
-};
+  event_type?: string;
 
-export type DetectionSettings = {
-  bruteForceThreshold: number;
-  passwordSprayingThreshold: number;
-  invalidUserThreshold: number;
-  privilegedAccounts: string[];
-  riskWeights: RiskWeights;
-};
+  title?: string;
 
-export type AppliedSettings = {
-  brute_force_threshold: number;
-  password_spraying_threshold: number;
-  invalid_user_threshold: number;
-  privileged_accounts: string[];
-  risk_weights: RiskWeights;
-};
+  status?: string;
 
-export type UploadResult = {
+  ip?: string | null;
+
+  user?: string | null;
+
+  method?: string | null;
+
+  raw?: string;
+
+  invalid_user?: boolean;
+
+  line_number?: number;
+
+}
+
+
+
+
+
+
+export interface UploadResult {
+
+
   analysis_id?: number;
+
+
   saved_to_database?: boolean;
+
+
   filename: string;
+
+
   entries: number;
+
+
   preview: string[];
+
+
   failed_logins: number;
+
+
   successful_logins: number;
+
+
   suspicious_ips: SuspiciousIp[];
+
+
   detections: Detection[];
+
+
   severity_summary: SeveritySummary;
+
+
   risk_score: number;
+
+
   risk_level: RiskLevel;
+
+
   timeline: TimelineEvent[];
-  applied_settings?: AppliedSettings;
-};
-export type AnalysisHistoryItem = {
+
+
+}
+
+
+
+
+
+
+
+
+export interface AnalysisHistoryItem {
+
+
   id: number;
+
+
   filename: string;
+
+
   upload_time: string | null;
+
+
   entries: number;
+
+
   failed_logins: number;
+
+
   successful_logins: number;
+
+
   risk_score: number;
+
+
   risk_level: RiskLevel;
+
+
   detection_count: number;
-  timeline_event_count?: number;
-  investigation_count?: number;
-};
 
-export type HistoricalAnalysisDetail = {
+
+}
+
+
+
+
+
+
+
+
+export interface HistoricalAnalysisDetail {
+
+
   id: number;
-  filename: string;
-  upload_time: string | null;
-  entries: number;
-  failed_logins: number;
-  successful_logins: number;
-  risk_score: number;
-  risk_level: RiskLevel;
-  detections: Detection[];
-  timeline: TimelineEvent[];
-};
 
-export type DeleteAnalysisResponse = {
-  message: string;
-  analysis_id: number;
+
   filename: string;
-};
+
+
+  upload_time: string | null;
+
+
+  entries: number;
+
+
+  failed_logins: number;
+
+
+  successful_logins: number;
+
+
+  risk_score: number;
+
+
+  risk_level: RiskLevel;
+
+
+  detections: Detection[];
+
+
+  timeline: TimelineEvent[];
+
+
+}
+
+
+
+
+
+
+
+
+export interface DeleteAnalysisResponse {
+
+
+  message: string;
+
+
+  analysis_id: number;
+
+
+  filename: string;
+
+
+}
+
+
+// ================================
+// INVESTIGATION TYPES
+// ================================
+
 
 export type InvestigationStatus =
   | "Open"
@@ -133,613 +263,850 @@ export type InvestigationStatus =
   | "Resolved"
   | "False Positive";
 
-export type Investigation = {
+
+
+
+
+export interface Investigation {
+
+
   id: number;
+
+
   analysis_id: number;
+
+
   detection_id: number;
+
+
   status: InvestigationStatus;
+
+
   analyst: string;
+
+
   notes: string;
+
+
   completed_actions: string[];
+
+
   created_at: string | null;
+
+
   updated_at: string | null;
-};
-
-export type SaveInvestigationPayload = {
-  analysis_id: number;
-  detection_id: number;
-  status: InvestigationStatus;
-  analyst: string;
-  notes: string;
-  completed_actions: string[];
-};
-
-export type UpdateInvestigationPayload = {
-  status: InvestigationStatus;
-  analyst: string;
-  notes: string;
-  completed_actions: string[];
-};
-
-export type ThreatIntelligenceResponse = {
-  ip: string;
-  country_code: string | null;
-  country: string | null;
-  continent_code: string | null;
-  continent: string | null;
-  asn: string | null;
-  organization: string | null;
-  organization_domain: string | null;
-  source: string;
-  cached: boolean;
-  recommendation: string;
-};
-
-export type ClearThreatIntelligenceCacheResponse = {
-  message: string;
-  removed_entries: number;
-};
 
 
-const DEFAULT_SETTINGS: DetectionSettings = {
-  bruteForceThreshold: 3,
-
-  passwordSprayingThreshold: 3,
-
-  invalidUserThreshold: 2,
-
-  privilegedAccounts: [
-    "root",
-    "admin",
-    "administrator",
-  ],
-
-  riskWeights: {
-    critical: 50,
-    high: 30,
-    medium: 15,
-    low: 5,
-  },
-};
-
-
-function getDetectionSettings(): DetectionSettings {
-
-  const savedSettings =
-    localStorage.getItem(
-      SETTINGS_STORAGE_KEY,
-    );
-
-
-  if (!savedSettings) {
-    return DEFAULT_SETTINGS;
-  }
-
-
-  try {
-
-    const parsedSettings =
-      JSON.parse(
-        savedSettings,
-      ) as Partial<DetectionSettings>;
-
-
-    return {
-
-      bruteForceThreshold:
-        parsedSettings.bruteForceThreshold ??
-        DEFAULT_SETTINGS.bruteForceThreshold,
-
-
-      passwordSprayingThreshold:
-        parsedSettings.passwordSprayingThreshold ??
-        DEFAULT_SETTINGS.passwordSprayingThreshold,
-
-
-      invalidUserThreshold:
-        parsedSettings.invalidUserThreshold ??
-        DEFAULT_SETTINGS.invalidUserThreshold,
-
-
-      privilegedAccounts:
-        parsedSettings.privilegedAccounts ??
-        DEFAULT_SETTINGS.privilegedAccounts,
-
-
-      riskWeights: {
-
-        critical:
-          parsedSettings.riskWeights?.critical ??
-          DEFAULT_SETTINGS.riskWeights.critical,
-
-
-        high:
-          parsedSettings.riskWeights?.high ??
-          DEFAULT_SETTINGS.riskWeights.high,
-
-
-        medium:
-          parsedSettings.riskWeights?.medium ??
-          DEFAULT_SETTINGS.riskWeights.medium,
-
-
-        low:
-          parsedSettings.riskWeights?.low ??
-          DEFAULT_SETTINGS.riskWeights.low,
-      },
-    };
-
-  } catch {
-
-    localStorage.removeItem(
-      SETTINGS_STORAGE_KEY,
-    );
-
-    return DEFAULT_SETTINGS;
-
-  }
 }
+
+
+
+
+
+
+
+export interface SaveInvestigationPayload {
+
+
+  analysis_id: number;
+
+
+  detection_id: number;
+
+
+  status: InvestigationStatus;
+
+
+  analyst: string;
+
+
+  notes: string;
+
+
+  completed_actions: string[];
+
+
+}
+
+
+
+
+
+
+
+export interface UpdateInvestigationPayload {
+
+
+  status: InvestigationStatus;
+
+
+  analyst: string;
+
+
+  notes: string;
+
+
+  completed_actions: string[];
+
+
+}
+
+
+
+
+
+
+
+// ================================
+// THREAT INTELLIGENCE TYPES
+// ================================
+
+
+export interface ThreatIntelligenceResponse {
+
+
+  ip: string;
+
+
+  country_code: string | null;
+
+
+  country: string | null;
+
+
+  continent_code: string | null;
+
+
+  continent: string | null;
+
+
+  asn: string | null;
+
+
+  organization: string | null;
+
+
+  organization_domain: string | null;
+
+
+  source: string;
+
+
+  cached: boolean;
+
+
+  recommendation: string;
+
+
+}
+
+
+
+
+
+
+
+
+export interface ClearThreatIntelligenceCacheResponse {
+
+
+  message: string;
+
+
+  removed_entries: number;
+
+
+}
+
+
+
+
+
+
+
+
+// ================================
+// API HELPERS
+// ================================
+
+
 function buildApiUrl(path: string): string {
 
-  const normalizedPath =
-    path.startsWith("/")
-      ? path
-      : `/${path}`;
+
+  return (
+
+    API_URL.replace(/\/$/, "")
+
+    +
+
+    (
+
+      path.startsWith("/")
+
+        ? path
+
+        : `/${path}`
+
+    )
+
+  );
 
 
-  if (!API_URL) {
-    return normalizedPath;
-  }
-
-
-  return `${API_URL.replace(
-    /\/+$/,
-    "",
-  )}${normalizedPath}`;
 }
+
+
+
+
 
 
 
 async function getErrorMessage(
+
   response: Response,
-  fallbackMessage: string,
+
+  fallback: string
+
 ): Promise<string> {
+
+
 
   try {
 
-    const errorData =
-      (await response.json()) as {
-        detail?: unknown;
-        message?: unknown;
-      };
+
+    const data = await response.json();
 
 
-    if (
-      typeof errorData.detail === "string"
-    ) {
-      return errorData.detail;
+
+    if (typeof data.detail === "string") {
+
+      return data.detail;
+
     }
 
 
-    if (
-      typeof errorData.message === "string"
-    ) {
-      return errorData.message;
+
+
+    if (typeof data.message === "string") {
+
+      return data.message;
+
     }
+
 
 
   } catch {
 
-    // API did not return JSON
+    // ignore
 
   }
 
 
-  return fallbackMessage;
+
+  return fallback;
+
+
 }
+
+
+
+
 
 
 
 async function apiFetch(
+
   path: string,
-  options?: RequestInit,
+
+  options?: RequestInit
+
 ): Promise<Response> {
 
-  try {
 
-    return await fetch(
-      buildApiUrl(path),
-      options,
-    );
+  return fetch(
 
+    buildApiUrl(path),
 
-  } catch (error) {
+    options
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unknown network error.";
+  );
 
 
-    throw new Error(
-      `SentinelAI could not connect to the backend. ${message}`,
-    );
-
-  }
 }
-
+// ================================
+// UPLOAD API
+// ================================
 
 
 export async function uploadLog(
-  file: File,
+
+  file: File
+
 ): Promise<UploadResult> {
+
 
 
   const formData = new FormData();
 
-  const settings =
-    getDetectionSettings();
-
 
   formData.append(
+
     "file",
-    file,
+
+    file
+
   );
 
 
-  formData.append(
-    "settings",
-    JSON.stringify(settings),
+
+
+  const response = await apiFetch(
+
+    "/api/upload",
+
+    {
+
+      method: "POST",
+
+      body: formData,
+
+    }
+
   );
 
 
-  const response =
-    await apiFetch(
-      "/api/upload",
-      {
-        method: "POST",
-        body: formData,
-      },
-    );
 
 
   if (!response.ok) {
 
-    const message =
+
+    throw new Error(
+
       await getErrorMessage(
+
         response,
-        "The backend could not analyze this file.",
-      );
 
+        "Upload failed."
 
-    throw new Error(message);
+      )
+
+    );
+
 
   }
 
 
-  return response.json() as Promise<UploadResult>;
+
+
+  return response.json();
+
+
 }
 
 
 
-export async function getAnalyses(): Promise<
-  AnalysisHistoryItem[]
-> {
 
-  const response =
-    await apiFetch(
-      "/api/analyses",
-    );
+
+
+
+
+
+// ================================
+// ANALYSIS API
+// ================================
+
+
+
+export async function getAnalyses()
+
+: Promise<AnalysisHistoryItem[]> {
+
+
+
+  const response = await apiFetch(
+
+    "/api/analyses"
+
+  );
+
+
 
 
   if (!response.ok) {
 
-    const message =
+
+    throw new Error(
+
       await getErrorMessage(
+
         response,
-        "SentinelAI could not load analysis history.",
-      );
 
+        "Unable to load analyses."
 
-    throw new Error(message);
+      )
+
+    );
+
 
   }
 
 
-  return response.json() as Promise<
-    AnalysisHistoryItem[]
-  >;
+
+
+
+  return response.json();
+
 
 }
+
+
+
+
+
 
 
 
 export async function getAnalysisById(
-  analysisId: number,
+
+  analysisId:number
+
 ): Promise<HistoricalAnalysisDetail> {
 
 
-  const response =
-    await apiFetch(
-      `/api/analyses/${analysisId}`,
-    );
+
+  const response = await apiFetch(
+
+    `/api/analyses/${analysisId}`
+
+  );
+
+
 
 
   if (!response.ok) {
 
-    const message =
+
+    throw new Error(
+
       await getErrorMessage(
+
         response,
-        "SentinelAI could not load this analysis.",
-      );
 
+        "Unable to load analysis."
 
-    throw new Error(message);
+      )
+
+    );
+
 
   }
 
 
-  return response.json() as Promise<
-    HistoricalAnalysisDetail
-  >;
+
+
+
+  return response.json();
+
 
 }
+
+
+
+
+
 
 
 
 export async function deleteAnalysis(
-  analysisId: number,
+
+  analysisId:number
+
 ): Promise<DeleteAnalysisResponse> {
 
 
-  const response =
-    await apiFetch(
-      `/api/analyses/${analysisId}`,
-      {
-        method: "DELETE",
-      },
-    );
+
+  const response = await apiFetch(
+
+    `/api/analyses/${analysisId}`,
+
+    {
+
+      method:"DELETE",
+
+    }
+
+  );
+
+
 
 
   if (!response.ok) {
 
-    const message =
+
+    throw new Error(
+
       await getErrorMessage(
+
         response,
-        "SentinelAI could not delete this analysis.",
-      );
 
+        "Unable to delete analysis."
 
-    throw new Error(message);
+      )
+
+    );
+
 
   }
 
 
-  return response.json() as Promise<
-    DeleteAnalysisResponse
-  >;
+
+
+
+  return response.json();
+
 
 }
+
+
+
+
+
+
+
+
+
+// ================================
+// INVESTIGATION API
+// ================================
+
+
+
+export async function getInvestigations()
+
+: Promise<Investigation[]> {
+
+
+
+  const response = await apiFetch(
+
+    "/api/investigations"
+
+  );
+
+
+
+
+  if (!response.ok) {
+
+
+    throw new Error(
+
+      await getErrorMessage(
+
+        response,
+
+        "Unable to load investigations."
+
+      )
+
+    );
+
+
+  }
+
+
+
+
+
+  return response.json();
+
+
+}
+
+
+
+
+
+
+
+
 export async function getInvestigation(
-  analysisId: number,
-  detectionId: number,
-): Promise<Investigation | null> {
 
+  investigationId:number
 
-  const searchParameters =
-    new URLSearchParams({
-      analysis_id: String(analysisId),
-      detection_id: String(detectionId),
-    });
-
-
-  const response =
-    await apiFetch(
-      `/api/investigations/lookup?${searchParameters.toString()}`,
-    );
-
-
-  if (!response.ok) {
-
-    const message =
-      await getErrorMessage(
-        response,
-        "SentinelAI could not load this investigation.",
-      );
-
-
-    throw new Error(message);
-
-  }
-
-
-  return response.json() as Promise<
-    Investigation | null
-  >;
-
-}
-
-
-
-
-export async function getInvestigations(
-  analysisId?: number,
-): Promise<Investigation[]> {
-
-
-  const path =
-    analysisId === undefined
-      ? "/api/investigations"
-      : `/api/investigations?analysis_id=${analysisId}`;
-
-
-  const response =
-    await apiFetch(path);
-
-
-
-  if (!response.ok) {
-
-    const message =
-      await getErrorMessage(
-        response,
-        "SentinelAI could not load investigations.",
-      );
-
-
-    throw new Error(message);
-
-  }
-
-
-
-  return response.json() as Promise<
-    Investigation[]
-  >;
-
-}
-
-
-
-
-export async function saveInvestigation(
-  payload: SaveInvestigationPayload,
 ): Promise<Investigation> {
 
 
-  const response =
-    await apiFetch(
-      "/api/investigations",
-      {
-        method: "POST",
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+  const response = await apiFetch(
 
-        body: JSON.stringify(payload),
-      },
-    );
+    `/api/investigations/${investigationId}`
+
+  );
+
 
 
 
   if (!response.ok) {
 
-    const message =
+
+    throw new Error(
+
       await getErrorMessage(
+
         response,
-        "SentinelAI could not save the investigation.",
-      );
 
+        "Unable to load investigation."
 
-    throw new Error(message);
+      )
+
+    );
+
 
   }
 
 
 
-  return response.json() as Promise<
-    Investigation
-  >;
+
+
+  return response.json();
+
 
 }
+
+
+
+
+
+
+
+
+export async function createInvestigation(
+
+  payload:SaveInvestigationPayload
+
+): Promise<Investigation> {
+
+
+
+  const response = await apiFetch(
+
+    "/api/investigations",
+
+    {
+
+      method:"POST",
+
+
+      headers:{
+
+        "Content-Type":
+
+          "application/json",
+
+      },
+
+
+      body:
+
+        JSON.stringify(payload),
+
+    }
+
+  );
+
+
+
+
+  if (!response.ok) {
+
+
+    throw new Error(
+
+      await getErrorMessage(
+
+        response,
+
+        "Unable to create investigation."
+
+      )
+
+    );
+
+
+  }
+
+
+
+
+
+  return response.json();
+
+
+}
+
+
+
+
+
+
+
+
+// Compatibility for old component imports
+
+export async function saveInvestigation(
+
+  payload:SaveInvestigationPayload
+
+): Promise<Investigation> {
+
+
+  return createInvestigation(payload);
+
+
+}
+
+
+
+
 
 
 
 
 export async function updateInvestigation(
-  investigationId: number,
-  payload: UpdateInvestigationPayload,
+
+  investigationId:number,
+
+
+  payload:UpdateInvestigationPayload
+
 ): Promise<Investigation> {
 
 
-  const response =
-    await apiFetch(
-      `/api/investigations/${investigationId}`,
-      {
-        method: "PUT",
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+  const response = await apiFetch(
 
-        body: JSON.stringify(payload),
+    `/api/investigations/${investigationId}`,
+
+    {
+
+      method:"PUT",
+
+
+      headers:{
+
+        "Content-Type":
+
+          "application/json",
+
       },
-    );
+
+
+      body:
+
+        JSON.stringify(payload),
+
+    }
+
+  );
+
 
 
 
   if (!response.ok) {
 
-    const message =
+
+    throw new Error(
+
       await getErrorMessage(
+
         response,
-        "SentinelAI could not update the investigation.",
-      );
 
+        "Unable to update investigation."
 
-    throw new Error(message);
+      )
+
+    );
+
 
   }
 
 
 
-  return response.json() as Promise<
-    Investigation
-  >;
+
+
+  return response.json();
+
 
 }
-
+// ================================
+// THREAT INTELLIGENCE API
+// ================================
 
 
 
 export async function getThreatIntelligence(
-  ipAddress: string,
-): Promise<ThreatIntelligenceResponse> {
 
+  ipAddress:string
 
-  const normalizedIp =
-    ipAddress.trim();
+):Promise<ThreatIntelligenceResponse>{
 
 
 
-  if (!normalizedIp) {
+  const ip = ipAddress.trim();
+
+
+
+
+  if(!ip){
 
     throw new Error(
-      "An IP address is required for threat-intelligence enrichment.",
+
+      "IP address is required."
+
     );
 
   }
 
 
 
-  const response =
-    await apiFetch(
-      `/api/threat-intel/${encodeURIComponent(
-        normalizedIp,
-      )}`,
-    );
 
 
 
-  if (!response.ok) {
+  const response = await apiFetch(
 
-    const message =
+    `/api/threat-intel/api/threat-intel/${encodeURIComponent(ip)}`
+
+  );
+
+
+
+
+
+
+  if(!response.ok){
+
+
+    throw new Error(
+
       await getErrorMessage(
+
         response,
-        "SentinelAI could not enrich this IP address.",
-      );
 
+        "Unable to get threat intelligence."
 
-    throw new Error(message);
+      )
+
+    );
+
 
   }
 
 
 
-  return response.json() as Promise<
-    ThreatIntelligenceResponse
-  >;
+
+
+  return response.json();
+
 
 }
 
@@ -747,204 +1114,328 @@ export async function getThreatIntelligence(
 
 
 
-export async function clearThreatIntelligenceCache(): Promise<
-  ClearThreatIntelligenceCacheResponse
-> {
 
 
-  const response =
-    await apiFetch(
-      "/api/threat-intel/cache",
-      {
-        method: "DELETE",
-      },
+
+
+export async function clearThreatIntelligenceCache()
+
+:Promise<ClearThreatIntelligenceCacheResponse>{
+
+
+
+  const response = await apiFetch(
+
+    "/api/threat-intel/api/threat-intel/cache",
+
+    {
+
+      method:"DELETE",
+
+    }
+
+  );
+
+
+
+
+
+
+  if(!response.ok){
+
+
+    throw new Error(
+
+      await getErrorMessage(
+
+        response,
+
+        "Unable to clear cache."
+
+      )
+
     );
 
-
-
-  if (!response.ok) {
-
-    const message =
-      await getErrorMessage(
-        response,
-        "SentinelAI could not clear the threat-intelligence cache.",
-      );
-
-
-    throw new Error(message);
 
   }
 
 
 
-  return response.json() as Promise<
-    ClearThreatIntelligenceCacheResponse
-  >;
+
+
+  return response.json();
+
 
 }
+
+
+
+
+
+
+
+
+
+// ================================
+// HISTORICAL ANALYSIS CONVERTER
+// ================================
+
+
+
 export function historicalAnalysisToUploadResult(
-  historicalAnalysis: HistoricalAnalysisDetail,
-): UploadResult {
+
+  historicalAnalysis:HistoricalAnalysisDetail
+
+):UploadResult {
 
 
-  const severitySummary: SeveritySummary = {
+
+  const severity_summary:SeveritySummary = {
+
+
 
     critical:
+
       historicalAnalysis.detections.filter(
-        (detection) =>
-          detection.severity === "Critical",
+
+        d => d.severity === "Critical"
+
       ).length,
+
 
 
     high:
+
       historicalAnalysis.detections.filter(
-        (detection) =>
-          detection.severity === "High",
+
+        d => d.severity === "High"
+
       ).length,
+
 
 
     medium:
+
       historicalAnalysis.detections.filter(
-        (detection) =>
-          detection.severity === "Medium",
+
+        d => d.severity === "Medium"
+
       ).length,
+
 
 
     low:
+
       historicalAnalysis.detections.filter(
-        (detection) =>
-          detection.severity === "Low",
+
+        d => d.severity === "Low"
+
       ).length,
+
 
   };
 
 
 
-  const suspiciousIpMap = new Map<
-    string,
-    SuspiciousIp
-  >();
+
+
+
+
+  const ipMap = new Map<string,SuspiciousIp>();
+
+
+
 
 
 
   historicalAnalysis.detections.forEach(
-    (detection) => {
+
+    detection => {
 
 
-      if (!detection.source_ip) {
+      if(!detection.source_ip){
+
         return;
+
       }
 
 
 
-      const existingIp =
-        suspiciousIpMap.get(
-          detection.source_ip,
+
+
+      const current =
+
+        ipMap.get(
+
+          detection.source_ip
+
         );
 
 
 
-      if (existingIp) {
-
-
-        existingIp.attempts =
-          Math.max(
-            existingIp.attempts,
-            detection.event_count,
-          );
 
 
 
-        existingIp.targeted_users =
-          Array.from(
-            new Set([
-              ...existingIp.targeted_users,
-              ...detection.affected_users,
-            ]),
-          );
+      if(current){
 
 
-        return;
+
+        current.attempts = Math.max(
+
+          current.attempts,
+
+          detection.event_count
+
+        );
+
+
+
+
+        current.targeted_users = [
+
+          ...new Set([
+
+            ...current.targeted_users,
+
+            ...detection.affected_users,
+
+          ])
+
+        ];
+
+
+
+      }
+
+      else{
+
+
+
+        ipMap.set(
+
+          detection.source_ip,
+
+          {
+
+
+            ip:detection.source_ip,
+
+
+            attempts:
+
+              detection.event_count,
+
+
+            targeted_users:
+
+              detection.affected_users,
+
+
+          }
+
+        );
+
 
       }
 
 
 
-      suspiciousIpMap.set(
-        detection.source_ip,
-        {
-          ip: detection.source_ip,
+    }
 
-          attempts:
-            detection.event_count,
-
-          targeted_users:
-            [
-              ...detection.affected_users,
-            ],
-        },
-      );
-
-    },
   );
+
+
+
+
+
+
 
 
 
   return {
 
+
     analysis_id:
+
       historicalAnalysis.id,
 
 
+
     saved_to_database:
+
       true,
 
 
+
     filename:
+
       historicalAnalysis.filename,
 
 
+
     entries:
+
       historicalAnalysis.entries,
 
 
+
     preview:
+
       [],
 
 
+
     failed_logins:
+
       historicalAnalysis.failed_logins,
 
 
+
     successful_logins:
+
       historicalAnalysis.successful_logins,
 
 
+
     suspicious_ips:
+
       Array.from(
-        suspiciousIpMap.values(),
+
+        ipMap.values()
+
       ),
 
 
+
     detections:
+
       historicalAnalysis.detections,
 
 
-    severity_summary:
-      severitySummary,
+
+    severity_summary,
+
 
 
     risk_score:
+
       historicalAnalysis.risk_score,
 
 
+
     risk_level:
+
       historicalAnalysis.risk_level,
 
 
+
     timeline:
+
       historicalAnalysis.timeline ?? [],
 
+
+
   };
+
 
 }

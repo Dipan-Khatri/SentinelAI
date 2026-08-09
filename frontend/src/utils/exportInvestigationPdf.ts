@@ -806,21 +806,20 @@ function exportInvestigationPdf({
       ],
 
       body: relatedTimeline.map(
-        (event) => [
-          event.timestamp ||
-            "Unavailable",
+  (event) => [
+    event.timestamp ?? "Unavailable",
 
-          event.title,
+    event.title ?? "-",
 
-          event.status,
+    event.status ?? "-",
 
-          event.ip ?? "-",
+    event.ip ?? "-",
 
-          event.user ?? "-",
+    event.user ?? "-",
 
-          event.method ?? "-",
-        ],
-      ),
+    event.method ?? "-",
+  ],
+),
 
       styles: {
         fontSize: 7.5,

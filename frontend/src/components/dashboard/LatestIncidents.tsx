@@ -284,7 +284,7 @@ function buildIncidentRows(
             "Unavailable",
 
           confidence:
-            detection.confidence,
+            detection.confidence?? 0, 
 
           mitreId:
             detection.mitre_id,

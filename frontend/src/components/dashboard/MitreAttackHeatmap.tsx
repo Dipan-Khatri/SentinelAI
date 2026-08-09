@@ -47,19 +47,18 @@ function MitreAttackHeatmap({
         total + technique.count,
       0,
     );
-
-  const averageConfidence =
-    analysis.detections.length > 0
-      ? Math.round(
-          analysis.detections.reduce(
-            (total, detection) =>
-              total +
-              detection.confidence,
-            0,
-          ) /
-            analysis.detections.length,
-        )
-      : 0;
+const averageConfidence =
+  analysis.detections.length > 0
+    ? Math.round(
+        analysis.detections.reduce(
+          (total, detection) =>
+            total +
+            (detection.confidence ?? 0),
+          0,
+        ) /
+          analysis.detections.length,
+      )
+    : 0;
 
   const highestTechnique =
     techniques[0] ?? null;
@@ -340,8 +339,8 @@ function buildTechniqueSummaries(
             count: 1,
             highestSeverity:
               detection.severity,
-            confidenceTotal:
-              detection.confidence,
+           confidenceTotal:
+  detection.confidence ?? 0,
           },
         );
 
@@ -349,9 +348,8 @@ function buildTechniqueSummaries(
       }
 
       existing.count += 1;
-
-      existing.confidenceTotal +=
-        detection.confidence;
+existing.confidenceTotal +=
+  detection.confidence ?? 0;
 
       if (
         severityWeight[
