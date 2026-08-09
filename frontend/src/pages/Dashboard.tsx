@@ -230,7 +230,7 @@ function Dashboard() {
 
             <h1 className="mt-2 text-3xl font-bold sm:text-4xl">
 
-              Good Morning, Dipan 👋
+               Welcome to SentinelAI 👋
 
             </h1>
 
