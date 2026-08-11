@@ -598,7 +598,7 @@ return (
 
 <h1 className="text-4xl font-bold">
 
-Good Morning, Dipan 👋
+Welcome to SentinelAI 👋
 
 </h1>
 
