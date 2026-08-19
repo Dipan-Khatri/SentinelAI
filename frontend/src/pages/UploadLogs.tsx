@@ -261,13 +261,19 @@ function UploadLogs() {
       setAnalysis(
         normalizedResult,
       );
+ localStorage.setItem(
+  STORAGE_KEY,
+  JSON.stringify(normalizedResult),
+);
 
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(
-          normalizedResult,
-        ),
-      );
+localStorage.setItem(
+  "latestAnalysisId",
+  String(
+    normalizedResult.analysis_id ??
+    normalizedResult.id
+  ),
+);
+      
 
       addSocActivity({
         title:
