@@ -213,14 +213,21 @@ function CaseQueue() {
                   investigation.analysis_id,
                 ) ?? null;
 
-              const detection =
-                analysis?.detections.find(
-                  (
-                    currentDetection,
-                  ) =>
-                    currentDetection.id ===
-                    investigation.detection_id,
-                );
+           const detections = Array.isArray(
+  analysis?.detections,
+)
+  ? analysis.detections
+  : [];
+
+const detection =
+  detections.find(
+    (
+      currentDetection,
+    ) =>
+      currentDetection.id ===
+      investigation.detection_id,
+  );
+
 
               return {
                 ...investigation,
@@ -923,16 +930,23 @@ function CaseCard({
   isOpening,
   onOpen,
 }: CaseCardProps) {
-  const actionTotal =
-    investigationCase.analysis?.detections.find(
-      (detection) =>
-        detection.id ===
-        investigationCase.detection_id,
-    )?.recommendations.length ?? 0;
+ const detections = Array.isArray(
+  investigationCase.analysis?.detections
+)
+  ? investigationCase.analysis.detections
+  : [];
 
-  const completedActionCount =
-    investigationCase
-      .completed_actions.length;
+const actionTotal =
+  detections.find(
+    (detection) =>
+      detection.id ===
+      investigationCase.detection_id
+  )?.recommendations?.length ?? 0;
+
+const completedActionCount =
+  Array.isArray(investigationCase.completed_actions)
+    ? investigationCase.completed_actions.length
+    : 0;
 
   const completionPercentage =
     actionTotal > 0

@@ -108,6 +108,13 @@ export interface TimelineEvent {
 export interface UploadResult {
 
 
+
+  id?: number;
+
+  total_events?: number;
+
+  severity?: RiskLevel;
+
   analysis_id?: number;
 
 
