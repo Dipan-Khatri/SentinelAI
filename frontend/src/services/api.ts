@@ -162,37 +162,23 @@ export interface UploadResult {
 
 
 
-
 export interface AnalysisHistoryItem {
-
-
   id: number;
-
-
   filename: string;
 
-
-  upload_time: string | null;
-
-
-  entries: number;
-
-
-  failed_logins: number;
-
-
-  successful_logins: number;
-
+  created_at?: string;
+  upload_time?: string;
 
   risk_score: number;
-
-
   risk_level: RiskLevel;
-
 
   detection_count: number;
 
+  failed_logins?: number;
+  successful_logins?: number;
 
+  entries?: number;
+  total_events?: number;
 }
 
 

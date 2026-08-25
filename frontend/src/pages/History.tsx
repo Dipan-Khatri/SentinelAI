@@ -122,11 +122,12 @@ function History() {
         (analysis) => analysis.risk_level === "High",
       ).length,
 
-      detections: analyses.reduce(
-        (total, analysis) =>
-          total + analysis.detection_count,
-        0,
-      ),
+detections: analyses.reduce(
+  (total, analysis) =>
+    total + (analysis.detection_count ?? 0),
+  0,
+),
+
     };
   }, [analyses]);
 
@@ -353,9 +354,10 @@ function History() {
                         <CalendarClock className="h-4 w-4" />
 
                         <span>
-                          {formatDate(
-                            analysis.upload_time,
-                          )}
+                   {formatDate(
+  analysis.created_at ?? analysis.upload_time,
+)}
+
                         </span>
                       </div>
                     </div>
@@ -419,32 +421,28 @@ function History() {
 
                   <HistoryMetric
                     label="Detections"
-                    value={String(
-                      analysis.detection_count,
-                    )}
+                    value={(analysis.detection_count ?? 0).toString()}
+
                     valueClass="text-red-300"
                   />
+<HistoryMetric
+  label="Log Entries"
+  value={(analysis.total_events ?? analysis.entries ?? 0).toLocaleString()}
+/>
 
-                  <HistoryMetric
-                    label="Log Entries"
-                    value={analysis.entries.toLocaleString()}
-                  />
+<HistoryMetric
+  label="Failed Logins"
+  value={(analysis.failed_logins ?? 0).toLocaleString()}
+  valueClass="text-orange-300"
+/>
 
-                  <HistoryMetric
-                    label="Failed Logins"
-                    value={String(
-                      analysis.failed_logins,
-                    )}
-                    valueClass="text-orange-300"
-                  />
 
-                  <HistoryMetric
-                    label="Successful"
-                    value={String(
-                      analysis.successful_logins,
-                    )}
-                    valueClass="text-green-300"
-                  />
+                 <HistoryMetric
+  label="Successful"
+  value={(analysis.successful_logins ?? 0).toLocaleString()}
+  valueClass="text-green-300"
+/>
+
 
                   <HistoryMetric
                     label="Database ID"
@@ -585,7 +583,7 @@ function NoSearchResults({
   );
 }
 
-function formatDate(value: string | null): string {
+function formatDate(value?: string | null): string {
   if (!value) {
     return "Upload time unavailable";
   }
@@ -598,6 +596,7 @@ function formatDate(value: string | null): string {
 
   return date.toLocaleString();
 }
+
 
 function getRiskValueClass(
   riskLevel: RiskLevel,
