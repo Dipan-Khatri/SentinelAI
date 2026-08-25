@@ -429,23 +429,20 @@ console.log("BACKEND RESPONSE:", rawResult);
       timeline
     */
 
+const normalizedResult: UploadResult = {
+  ...rawResult,
 
-    const normalizedResult: UploadResult =
-    {
+  analysis_id:
+    rawResult.analysis_id ??
+    (rawResult as any).id ??
+    Date.now(),
 
-      ...rawResult,
-analysis_id:
-  rawResult.analysis_id ??
-  (rawResult as any).id ??
-  Date.now(),
-
-filename:
-  normalizeFilename(
-    rawResult.filename ??
-    preview.name,
-    preview.name,
-  ),
-
+  filename:
+    normalizeFilename(
+      rawResult.filename ?? preview.name,
+      preview.name,
+    ),
+    
 entries:
   rawResult.entries ??
   (rawResult as any).total_events ??
