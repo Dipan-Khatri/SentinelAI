@@ -161,27 +161,32 @@ export interface UploadResult {
 
 
 
-
 export interface AnalysisHistoryItem {
   id: number;
+
   filename: string;
 
   created_at?: string;
   upload_time?: string;
 
-  risk_score: number;
-  risk_level: RiskLevel;
-
-  detection_count: number;
+  total_events?: number;
 
   failed_logins?: number;
+
   successful_logins?: number;
 
+  risk_score: number;
+
+  severity?: string;
+
+  risk_level?: RiskLevel;
+
+  detections?: number;
+
+  detection_count?: number;
+
   entries?: number;
-  total_events?: number;
 }
-
-
 
 
 
