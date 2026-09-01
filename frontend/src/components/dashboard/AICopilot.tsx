@@ -107,15 +107,15 @@ function AICopilot({
   const messageContainerRef =
     useRef<HTMLDivElement | null>(null);
 
-  const topSuspiciousIp = useMemo(
-    () =>
-      [...analysis.suspicious_ips].sort(
-        (firstIp, secondIp) =>
-          secondIp.attempts -
-          firstIp.attempts,
-      )[0],
-    [analysis.suspicious_ips],
-  );
+ const topSuspiciousIp = useMemo(
+  () =>
+    [...(analysis.suspicious_ips ?? [])].sort(
+      (firstIp, secondIp) =>
+        secondIp.attempts -
+        firstIp.attempts,
+    )[0],
+  [analysis.suspicious_ips],
+);
 
   useEffect(() => {
     const container =
@@ -321,11 +321,10 @@ function AICopilot({
                     label="Detections"
                     value={analysis.detections.length.toLocaleString()}
                   />
-
-                  <ContextRow
-                    label="Suspicious IPs"
-                    value={analysis.suspicious_ips.length.toLocaleString()}
-                  />
+<ContextRow
+  label="Suspicious IPs"
+  value={(analysis.suspicious_ips ?? []).length.toLocaleString()}
+/>
                 </div>
               </div>
             </div>
@@ -751,9 +750,9 @@ function buildRiskExplanation(
     );
   }
 
-  if (analysis.suspicious_ips.length > 0) {
+  if ((analysis.suspicious_ips ?? []).length > 0) {
     factors.push(
-      `${analysis.suspicious_ips.length.toLocaleString()} suspicious source IP address(es)`,
+      `${(analysis.suspicious_ips ?? []).length.toLocaleString()} suspicious source IP address(es)`,
     );
   }
 
@@ -808,10 +807,10 @@ function buildSuspiciousIpResponse(
 
 SentinelAI processed ${analysis.entries.toLocaleString()} events, but no source produced enough repeated failures to be ranked as suspicious.`;
   }
+const rankedIps = [
+  ...(analysis.suspicious_ips ?? []),
+]
 
-  const rankedIps = [
-    ...analysis.suspicious_ips,
-  ]
     .sort(
       (firstIp, secondIp) =>
         secondIp.attempts -
